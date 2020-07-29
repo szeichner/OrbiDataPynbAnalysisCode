@@ -350,7 +350,10 @@ def calc_Raw_File_Output(dfList, weightByNLHeight=False, isotopeList = ['13C','1
                             rtnDict[massStr][header]['StDev'] = math.sqrt(np.average((values-average)**2, weights=weights))
                             rtnDict[massStr][header]['StError'] = rtnDict[massStr][header]['StDev'] / np.power(len(dfList[fragmentIndex]),0.5)
                             rtnDict[massStr][header]['RelStError'] = rtnDict[massStr][header]['StError'] / rtnDict[massStr][header]['Ratio']
-                            rtnDict[massStr][header]['ShotNoiseLimit by Quadrature'] = np.power((np.power(np.mean(dfList[fragmentIndex]['counts' + isotopeList[i]].sum()), 2)) + np.power(np.mean(dfList[fragmentIndex]['counts' + isotopeList[j]]), 2), 0.5)
+                            a = dfList[fragmentIndex]['counts' + isotopeList[i]].sum()
+                            b = dfList[fragmentIndex]['counts' + isotopeList[j]].sum()
+                            shotNoiseByQuad = np.power((1./a + 1./b),0.5)
+                            rtnDict[massStr][header]['ShotNoiseLimit by Quadrature'] = shotNoiseByQuad
                             averageTIC = np.mean(dfList[fragmentIndex]['tic'])
                             valuesTIC = dfList[fragmentIndex]['tic']
                             rtnDict[massStr][header]['TICVar'] =  math.sqrt(np.mean((valuesTIC-averageTIC)**2))/np.mean(valuesTIC)
@@ -360,6 +363,7 @@ def calc_Raw_File_Output(dfList, weightByNLHeight=False, isotopeList = ['13C','1
                             rtnDict[massStr][header]['TIC*ITMean'] = averageTICIT
                             rtnDict[massStr][header]['TIC*ITVar'] =  math.sqrt(np.mean((valuesTICIT-averageTICIT)**2))/np.mean(valuesTICIT)
 
+    
                         else:
                             #perform calculations and add them to the dictionary     
                             rtnDict[massStr][header] = {}
@@ -367,7 +371,10 @@ def calc_Raw_File_Output(dfList, weightByNLHeight=False, isotopeList = ['13C','1
                             rtnDict[massStr][header]['StDev'] = np.std(dfList[fragmentIndex][header])
                             rtnDict[massStr][header]['StError'] = rtnDict[massStr][header]['StDev'] / np.power(len(dfList[fragmentIndex]),0.5)
                             rtnDict[massStr][header]['RelStError'] = rtnDict[massStr][header]['StError'] / rtnDict[massStr][header]['Ratio']
-                            rtnDict[massStr][header]['ShotNoiseLimit by Quadrature'] = np.power((np.power(np.mean(dfList[fragmentIndex]['counts' + isotopeList[i]].sum()), 2)) + np.power(np.mean(dfList[fragmentIndex]['counts' + isotopeList[j]]), 2), 0.5)
+                            a = dfList[fragmentIndex]['counts' + isotopeList[i]].sum()
+                            b = dfList[fragmentIndex]['counts' + isotopeList[j]].sum()
+                            shotNoiseByQuad = np.power((1./a + 1./b),0.5)
+                            rtnDict[massStr][header]['ShotNoiseLimit by Quadrature'] = shotNoiseByQuad
                             
                             averageTIC = np.mean(dfList[fragmentIndex]['tic'])
                             valuesTIC = dfList[fragmentIndex]['tic']

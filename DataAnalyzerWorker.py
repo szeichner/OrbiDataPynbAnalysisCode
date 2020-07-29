@@ -9,13 +9,13 @@ Last Modified: Thurs July 16, 2020
 import DataAnalyzer
 
 #Change these things to test the different code, or comment out if you're using in conjunction with the python notebook
-inputStandardFolder = "/Users/sarahzeichner/Documents/Caltech/Research/Direct Injection/DirectInjectionData/July2020/July172020/Standard"
+inputStandardFolder = "/Users/sarahzeichner/Documents/Caltech/Research/Direct Injection/DirectInjectionData/July2020/July172020/Sample"
 #inputStandardFile = "/Users/sarahzeichner/Documents/Caltech/Research/Quick Orbitrap Methods/data/June2020/AA_std_2_15_agc_2e4.xlsx"
 #isotopeList = ['UnSub','15N','13C']
 isotopeList = ['UnSub','15N','13C']
 gc_elution_on = True
-peakTimeFrames = [(6.65,6.78), (7.85, 8.12), (9.95,10.15), (10.21, 10.40), (12.32,12.47)]
-#peakTimeFrames = [(6.65,6.78), (7.86, 8.12), (9.95,10.15), (12.32,12.47)]
+#peakTimeFrames = [(6.65,6.78), (7.85, 8.12), (9.95,10.15), (10.21, 10.40), (12.32,12.47)]
+peakTimeFrames = [(6.65,6.78), (7.86, 8.12), (9.95,10.15), (12.32,12.47)]
 #peakTimeFrames = [(9.96,10.15)]
 omitRatios = ['15N/13C', '13C/15N']
 #omitRatios = []
