@@ -22,7 +22,7 @@ from collections import Counter
 
 def import_Peaks_From_FTStatFile(inputFileName):
     '''
-    Import peaks from FT statistic output file into a workable form, step 1
+    Import peaks from FT statistic output file into a workable form, s`tep 1
     
     Inputs:
         inputFileName: The excel file to input from
