@@ -18,7 +18,21 @@ import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 import io
 from collections import Counter
+from scipy.stats import norm
+from scipy.optimize import curve_fit
+from scipy.integrate import simps
 
+#####################################################################
+########################## CONSTANTS ################################
+#####################################################################
+
+WINDOW_LENGTH  = 5
+SLOPE_THRESHHOLD = 0.008
+NAN_REPLACER = 0.0000001
+
+#####################################################################
+########################## FUNCTIONS ################################
+#####################################################################
 
 def import_Peaks_From_FTStatFile(inputFileName):
     '''
@@ -283,7 +297,6 @@ def cull_Zero_Scans(df):
     df = df[~(df == 0).any(axis=1)]
     return df
 
-
 def cull_On_GC_Peaks(df, gcElutionTimeFrame = (0,0), NL_over_TIC=0.1):
     '''
     Inputs: 
@@ -300,15 +313,76 @@ def cull_On_GC_Peaks(df, gcElutionTimeFrame = (0,0), NL_over_TIC=0.1):
     
     return start_index, end_index
 
+def calc_slope(x):
+    '''
+
+    Fits a 1-d polynomial (i.e. line) to the data
+
+    Inputs: 
+        x = range to calculate slope over
+    Outputs: 
+       slope for moving range of points
+    '''
+    slope = np.polyfit(range(len(x)), x, 1)[0]
+    return slope
+
+def gaussian(x, a, b, c):
+    '''
+
+    Fits the data with a gaussian curve
+
+    Inputs: 
+        x = range to fit with gaussian
+        a, b, c = coefficients of gaussian fit that are calculated
+    Outputs: 
+       gaussian fit
+    '''    
+    return a*np.exp(-np.power(x - b, 2)/(2*np.power(c, 2)))
+
+def integrateTimeSeries(x, y, windowLength = 5, nanReplacer = 0.000001, slopeThreshhold =  0.08):
+    '''
+
+    Integrates a gaussian peak to return an area
+
+    Inputs: 
+        x = x values
+        y = y values 
+        windowLength = defines window used to calculate rolling slope
+        nanReplacer = if slopes are NAN, what the values are replaced with in table. should be below slopeThreshhold
+        slopeThreshhold = defines slope above which peak is defined
+    Outputs: 
+       area = area under integrated gaussian peak
+    '''    
+
+    data = pd.DataFrame(data=[x,y], columns=['x','y'])
+    data['slope'] = data.rolling(windowLength).apply(calc_slope)
+    data['slope'] = data['slope'].fillna(nanReplacer)
+    data['abs_slope'] =  abs(data['slope'])
+
+    #Find threshhold and choose subset of data based on slope threshhold
+    data = data[data['abs_slope'] > slopeThreshhold] 
+
+    #Fit a gaussian to the data
+    popt, pcov = curve_fit(gaussian, data['x'], data['y'])
+    plt.scatter(x, y)
+    plt.plot(data['x'], gaussian(data['x'], *popt), 'g--', 
+         label='fit: a=%5.3f, b=%5.3f, c=%5.3f' % tuple(popt))
+    plt.xlabel('x')
+    plt.ylabel('y')
+    plt.legend()
+    plt.show()
+
+    #integrate the polynomial to get area under the curve
+    area = simps(gaussian(data['x'], *popt))
+    return area
 
     
-def calc_Raw_File_Output(dfList, weightByNLHeight=False, isotopeList = ['13C','15N','UnSub'],omitRatios = []):
+def calc_Raw_File_Output(dfList, isotopeList = ['13C','15N','UnSub'],omitRatios = []):
     '''
     For each ratio of interest, calculates mean, stdev, SErr, RSE, and ShotNoise based on counts. Outputs these in a dictionary which organizes by fragment (i.e different entries for fragments at 119 and 109).
     
     Inputs:
         dfList: A list of merged data frames from the _combineSubstituted function. Each dataframe constitutes one fragment.
-        weightByNLHeight: Specify whether you want to calculate weighted averages by NL score
         isotopeList: A list of isotopes corresponding to the peaks extracted by FTStat, in the order they were extracted. This must be the same for each fragment. This is used to determine all ratios of interest, i.e. 13C/UnSub, and label them in the proper order. 
         omitRatios: A list of ratios to ignore. I.e. by default, the script will report 13C/15N ratios, which one may not care about. In this case, the list should be ['13C/15N','15N/13C'], including both versions, to avoid errors. 
          
@@ -337,59 +411,52 @@ def calc_Raw_File_Output(dfList, weightByNLHeight=False, isotopeList = ['13C','1
                             header = isotopeList[j] + '/' + isotopeList[i]
                         except:
                             raise Exception('Sorry, cannot find ratios for your input isotopeList')
-                    
+
                     if header in omitRatios:
                         print("Ratios omitted:" + header)
                         continue
-                    else: 
-                        if weightByNLHeight==True:
-                            #Weight based on NL value for elution 
+                    else:
+                            #This logic calculates ratios and statistics for each peak within each file, weighted by NL score for each scan
                             rtnDict[massStr][header] = {}
                             values = dfList[fragmentIndex][header]
                             weights = dfList[fragmentIndex]['absIntensityUnSub']
                             average = np.average(values, weights=weights)
                             rtnDict[massStr][header]['Ratio'] = average
-                            rtnDict[massStr][header]['StDev'] = math.sqrt(np.average((values-average)**2, weights=weights))
-                            rtnDict[massStr][header]['StError'] = rtnDict[massStr][header]['StDev'] / np.power(len(dfList[fragmentIndex]),0.5)
-                            rtnDict[massStr][header]['RelStError'] = rtnDict[massStr][header]['StError'] / rtnDict[massStr][header]['Ratio']
-                            a = dfList[fragmentIndex]['counts' + isotopeList[i]].sum()
-                            b = dfList[fragmentIndex]['counts' + isotopeList[j]].sum()
-                            shotNoiseByQuad = np.power((1./a + 1./b),0.5)
+                            rtnDict[massStr][header]['StDev'] = math.sqrt(
+                                np.average((values-average)**2, weights=weights))
+                            rtnDict[massStr][header]['StError'] = rtnDict[massStr][header]['StDev'] / \
+                                np.power(len(dfList[fragmentIndex]), 0.5)
+                            rtnDict[massStr][header]['RelStError'] = rtnDict[massStr][header]['StError'] / \
+                                rtnDict[massStr][header]['Ratio']
+                            x = dfList[fragmentIndex]['retTime']
+                            a = dfList[fragmentIndex]['counts' +
+                                                      isotopeList[i]].sum()
+                            b = dfList[fragmentIndex]['counts' +
+                                                      isotopeList[j]].sum()
+                            shotNoiseByQuad = np.power((1./a + 1./b), 0.5)
                             rtnDict[massStr][header]['ShotNoiseLimit by Quadrature'] = shotNoiseByQuad
                             averageTIC = np.mean(dfList[fragmentIndex]['tic'])
                             valuesTIC = dfList[fragmentIndex]['tic']
-                            rtnDict[massStr][header]['TICVar'] =  math.sqrt(np.mean((valuesTIC-averageTIC)**2))/np.mean(valuesTIC)
-                            
-                            averageTICIT = np.mean(dfList[fragmentIndex]['TIC*IT'])
+                            rtnDict[massStr][header]['TICVar'] = math.sqrt(
+                                np.mean((valuesTIC-averageTIC)**2))/np.mean(valuesTIC)
+
+                            averageTICIT = np.mean(
+                                dfList[fragmentIndex]['TIC*IT'])
                             valuesTICIT = dfList[fragmentIndex]['TIC*IT']
                             rtnDict[massStr][header]['TIC*ITMean'] = averageTICIT
-                            rtnDict[massStr][header]['TIC*ITVar'] =  math.sqrt(np.mean((valuesTICIT-averageTICIT)**2))/np.mean(valuesTICIT)
+                            rtnDict[massStr][header]['TIC*ITVar'] = math.sqrt(
+                                np.mean((valuesTICIT-averageTICIT)**2))/np.mean(valuesTICIT)
 
-    
-                        else:
-                            #perform calculations and add them to the dictionary     
-                            rtnDict[massStr][header] = {}
-                            rtnDict[massStr][header]['Ratio'] = np.mean(dfList[fragmentIndex][header])
-                            rtnDict[massStr][header]['StDev'] = np.std(dfList[fragmentIndex][header])
-                            rtnDict[massStr][header]['StError'] = rtnDict[massStr][header]['StDev'] / np.power(len(dfList[fragmentIndex]),0.5)
-                            rtnDict[massStr][header]['RelStError'] = rtnDict[massStr][header]['StError'] / rtnDict[massStr][header]['Ratio']
-                            a = dfList[fragmentIndex]['counts' + isotopeList[i]].sum()
-                            b = dfList[fragmentIndex]['counts' + isotopeList[j]].sum()
-                            shotNoiseByQuad = np.power((1./a + 1./b),0.5)
-                            rtnDict[massStr][header]['ShotNoiseLimit by Quadrature'] = shotNoiseByQuad
-                            
-                            averageTIC = np.mean(dfList[fragmentIndex]['tic'])
-                            valuesTIC = dfList[fragmentIndex]['tic']
-                            rtnDict[massStr][header]['TICVar'] =  math.sqrt(np.mean((valuesTIC-averageTIC)**2))/np.mean(valuesTIC)
-                            
-                            averageTICIT = np.mean(dfList[fragmentIndex]['TIC*IT'])
-                            valuesTICIT = dfList[fragmentIndex]['TIC*IT']
-                            rtnDict[massStr][header]['TIC*ITMean'] = averageTICIT
-                            rtnDict[massStr][header]['TIC*ITVar'] =  math.sqrt(np.mean((valuesTICIT-averageTICIT)**2))/np.mean(valuesTICIT)
-
+                            #Integrate the curves based on the time frame chosen and return that R value
+                            a_integral = integrateTimeSeries(x, a, windowLength= WINDOW_LENGTH, nanReplacer= NAN_REPLACER, slopeThreshhold=SLOPE_THRESHHOLD)
+                            b_integral =  integrateTimeSeries(x, b, windowLength= WINDOW_LENGTH, nanReplacer= NAN_REPLACER, slopeThreshhold=SLOPE_THRESHHOLD)
+                            R_integrated = float(b_integral) / float(a_integral)
+                            rtnDict[massStr][header]['Ratio_Integrated'] = R_integrated
     return rtnDict
 
-def calc_Folder_Output(folderPath, cullOn=None, cullZeroScansOn=False, gcElutionOn=False, weightByNLHeight=False, gcElutionTimes = [],  cullAmount=2, isotopeList = ['13C','15N','UnSub'], NL_over_TIC=0.10, omitRatios = [], fileCsvOutputPath=None):
+
+
+def calc_Folder_Output(folderPath, cullOn=None, cullZeroScansOn=False, gcElutionOn=False, gcElutionTimes = [],  cullAmount=2, isotopeList = ['13C','15N','UnSub'], NL_over_TIC=0.10, omitRatios = [], fileCsvOutputPath=None):
     '''
     For each raw file in a folder, calculate mean, stdev, SErr, RSE, and ShotNoise based on counts. Outputs these in a dictionary which organizes by fragment (i.e different entries for fragments at 119 and 109).  
     Inputs:
@@ -397,7 +464,6 @@ def calc_Folder_Output(folderPath, cullOn=None, cullZeroScansOn=False, gcElution
         cullOn: cull specific range of scans
         cullZeroScansOn: toggle to eliminate any scans with zero counts
         gcElutionOn: Specify whether you expect elution to change over time, so that you can calculate weighted averages
-        weightByNLNeight: Toggle "TRUE" to weight R values by height of NL score
         gcElutionTimes: Time frames to cull the GC peaks for
         cullAmount: If you pass in a range of scans for "cullOn", this is the number of stddevs beyond which scans are culled. default is 2.
         isotopeList: A list of isotopes corresponding to the peaks extracted by FTStat, in the order they were extracted. This must be the same for each fragment. This is used to determine all ratios of interest, i.e. 13C/UnSub, and label them in the proper order. 
@@ -415,7 +481,7 @@ def calc_Folder_Output(folderPath, cullOn=None, cullZeroScansOn=False, gcElution
     ratio = "Ratio"
     stdev = "StdDev"
     rtnAllFilesDF = []
-    header = ["FileNumber", "Fragment", "IsotopeRatio", "Average", "StdDev", "StdError", "RelStdError","TICVar","TIC*ITVar","TIC*ITMean", 'ShotNoise']
+    header = ["FileNumber", "Fragment", "IsotopeRatio", "IntegratedIsotopeRatio" "Average", "StdDev", "StdError", "RelStdError","TICVar","TIC*ITVar","TIC*ITMean", 'ShotNoise']
     #get all the file names in the folder with the same end 
     fileNames = [x for x in os.listdir(folderPath) if x.endswith(".xlsx")]
     peakNumber = 0
@@ -427,7 +493,7 @@ def calc_Folder_Output(folderPath, cullOn=None, cullZeroScansOn=False, gcElution
         thesePeaks = import_Peaks_From_FTStatFile(thisFileName)
         thisPandas = convert_To_Pandas_DataFrame(thesePeaks)
         thisMergedDF = combine_Substituted_Peaks(peakDF=thisPandas,cullOn=cullOn, cullZeroScansOn = cullZeroScansOn, gc_elution_on=gcElutionOn, gc_elution_times=gcElutionTimes, cullAmount=cullAmount, isotopeList=isotopeList, NL_over_TIC=NL_over_TIC, csv_output_path=fileCsvOutputPath)
-        thisOutput = calc_Raw_File_Output(thisMergedDF, weightByNLHeight, isotopeList, omitRatios)
+        thisOutput = calc_Raw_File_Output(thisMergedDF, isotopeList, omitRatios)
         keys = list(thisOutput.keys())
         peakNumber = len(keys)
 
@@ -440,6 +506,7 @@ def calc_Folder_Output(folderPath, cullOn=None, cullZeroScansOn=False, gcElution
                 thisRatio = isotopeRatios[isotopeRatio]
                 #add subkey to each separate df for isotope specific 
                 thisRVal = thisOutput[thisPeak][thisRatio]["Ratio"]
+                thisRIntegratedVal = thisOutput[thisPeak][thisRatio]["Ratio_Integrated"]
                 thisStdDev = thisOutput[thisPeak][thisRatio]["StDev"]
                 thisStError = thisOutput[thisPeak][thisRatio]["StError"] 
                 thisRelStError = thisOutput[thisPeak][thisRatio]["RelStError"]
@@ -447,7 +514,7 @@ def calc_Folder_Output(folderPath, cullOn=None, cullZeroScansOn=False, gcElution
                 thisTICITVar = thisOutput[thisPeak][thisRatio]["TIC*ITVar"]
                 thisTICITMean = thisOutput[thisPeak][thisRatio]["TIC*ITMean"]
                 thisShotNoise = thisOutput[thisPeak][thisRatio]["ShotNoiseLimit by Quadrature"]
-                thisRow = [thisFileName, thisPeak, thisRatio, thisRVal, thisStdDev, thisStError,thisRelStError,thisTICVar,thisTICITVar,thisTICITMean, thisShotNoise] 
+                thisRow = [thisFileName, thisPeak, thisRatio, thisRIntegratedVal, thisRVal, thisStdDev, thisStError,thisRelStError,thisTICVar,thisTICITVar,thisTICITMean, thisShotNoise] 
                 rtnAllFilesDF.append(thisRow)
 
     rtnAllFilesDF = pd.DataFrame(rtnAllFilesDF)
@@ -461,17 +528,18 @@ def calc_Folder_Output(folderPath, cullOn=None, cullZeroScansOn=False, gcElution
     #we can now calculate average, stdev, relstdev for each fragment across replicate measurements 
     if len(fileNames)>1: #only calculate  stats if there is more than one file
         avgDF = rtnAllFilesDF.groupby(['Fragment', 'IsotopeRatio'])["Average"].mean()
+        integratedAvgDF = rtnAllFilesDF.groupby(['Fragment', 'IntegratedIsotopeRatio'])["Average"].mean()
         countDF = rtnAllFilesDF.groupby(['Fragment', 'IsotopeRatio'])["Average"].count()
         stdDF = rtnAllFilesDF.groupby(['Fragment', 'IsotopeRatio'])["Average"].std()
         sqrtCountDF = np.power(countDF, 0.5)
         stdErrorDF = np.divide(stdDF, sqrtCountDF)
         relStdErrorDF = np.divide(stdErrorDF, avgDF)
 
-    statsDF = pd.DataFrame([avgDF, countDF, stdDF, stdErrorDF, relStdErrorDF], index=["Avg R Val", "N", "StdDev", "StdError", "RelStdError"]) 
-
-    #statsDF.rename(index={0:'IsotopeRatio',1:'Average R Val',2:'n', 3:'StdDev', 4:'StdError', 5:'RelStdError'}, inplace=True)
-    statsDF.to_csv(str(folderPath + '/' + "stats_output.csv"), index = True, header=True)
+    statsDF = pd.DataFrame([avgDF, integratedAvgDF, countDF, stdDF, stdErrorDF, relStdErrorDF], index=["Avg R Val", "Integrated Avg R val", "N", "StdDev", "StdError", "RelStdError"]) 
+    
     #output results to csv
+    statsDF.to_csv(str(folderPath + '/' + "stats_output.csv"), index = True, header=True)
+   
     return rtnAllFilesDF, statsDF
            
 def plot_Output(output,isotopeList = ['13C','15N','UnSub'],omitRatios = [],numCols = 2,widthMultiple = 4, heightMultiple = 4):
