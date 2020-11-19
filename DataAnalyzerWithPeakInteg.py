@@ -1,7 +1,7 @@
 ##!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Last Modified: Tues July 21, 2020
+Last Modified: Friday Nov 13, 2020
 @author: sarahzeichner
 
 This code has all of the data processing code, to take data after it has been processed by FT statistic (or equivalent) and calculate isotope ratios based on input
@@ -262,8 +262,7 @@ def combine_Substituted_Peaks(peakDF, cullOn = [], cullZeroScansOn = False, gc_e
             
             #Cull based on time frame for GC peaks
             if gc_elution_on == True and gc_elution_times != 0:
-                start_index, end_index = cull_On_GC_Peaks(df1, thisGCElutionTimeRange, NL_over_TIC)
-            df1 = df1[start_index:end_index]
+                df1 = cull_On_GC_Peaks(df1, thisGCElutionTimeRange, NL_over_TIC)
 
             #Calculates ratio values and adds them to the dataframe. Weighted averages will be calculated in the next step
             df1 = calc_Append_Ratios(df1,isotopeList = isotopeList)
@@ -308,10 +307,8 @@ def cull_On_GC_Peaks(df, gcElutionTimeFrame = (0,0), NL_over_TIC=0.1):
     '''
     # get the scan numbers for the retention  time frame
     if gcElutionTimeFrame != (0,0):
-        start_index = df.loc[df['retTime'] == gcElutionTimeFrame[0]].index.values.astype(int)[0]
-        end_index = df.loc[df['retTime'] == gcElutionTimeFrame[1]].index.values.astype(int)[0]
-    
-    return start_index, end_index
+        df = df[df['retTime'].between(gcElutionTimeFrame[0], gcElutionTimeFrame[1], inclusive=True)]
+    return df
 
 def calc_slope(x):
     '''
@@ -354,18 +351,19 @@ def integrateTimeSeries(x, y, windowLength = 5, nanReplacer = 0.000001, slopeThr
        area = area under integrated gaussian peak
     '''    
 
-    data = pd.DataFrame(data=[x,y], columns=['x','y'])
-    data['slope'] = data.rolling(windowLength).apply(calc_slope)
-    data['slope'] = data['slope'].fillna(nanReplacer)
-    data['abs_slope'] =  abs(data['slope'])
+    data = {'x':x, 'y':y}
+    df = pd.DataFrame(data)
+    df['slope'] = df['y'].rolling(windowLength).apply(calc_slope)
+    df['slope'] = df['slope'].fillna(nanReplacer)
+    df['abs_slope'] =  abs(df['slope'])
 
     #Find threshhold and choose subset of data based on slope threshhold
-    data = data[data['abs_slope'] > slopeThreshhold] 
+    df = df[df['abs_slope'] > slopeThreshhold] 
 
     #Fit a gaussian to the data
-    popt, pcov = curve_fit(gaussian, data['x'], data['y'])
+    popt, pcov = curve_fit(gaussian, df['x'], df['y'])
     plt.scatter(x, y)
-    plt.plot(data['x'], gaussian(data['x'], *popt), 'g--', 
+    plt.plot(df['x'], gaussian(df['x'], *popt), 'g--', 
          label='fit: a=%5.3f, b=%5.3f, c=%5.3f' % tuple(popt))
     plt.xlabel('x')
     plt.ylabel('y')
@@ -428,7 +426,7 @@ def calc_Raw_File_Output(dfList, isotopeList = ['13C','15N','UnSub'],omitRatios 
                                 np.power(len(dfList[fragmentIndex]), 0.5)
                             rtnDict[massStr][header]['RelStError'] = rtnDict[massStr][header]['StError'] / \
                                 rtnDict[massStr][header]['Ratio']
-                            x = dfList[fragmentIndex]['retTime']
+                            
                             a = dfList[fragmentIndex]['counts' +
                                                       isotopeList[i]].sum()
                             b = dfList[fragmentIndex]['counts' +
@@ -447,10 +445,14 @@ def calc_Raw_File_Output(dfList, isotopeList = ['13C','15N','UnSub'],omitRatios 
                             rtnDict[massStr][header]['TIC*ITVar'] = math.sqrt(
                                 np.mean((valuesTICIT-averageTICIT)**2))/np.mean(valuesTICIT)
 
+                            x = dfList[fragmentIndex]['retTime']
+                            unsub_y = dfList[fragmentIndex]['counts' + isotopeList[i]]
+                            sub_y = dfList[fragmentIndex]['counts' + isotopeList[j]]
+
                             #Integrate the curves based on the time frame chosen and return that R value
-                            a_integral = integrateTimeSeries(x, a, windowLength= WINDOW_LENGTH, nanReplacer= NAN_REPLACER, slopeThreshhold=SLOPE_THRESHHOLD)
-                            b_integral =  integrateTimeSeries(x, b, windowLength= WINDOW_LENGTH, nanReplacer= NAN_REPLACER, slopeThreshhold=SLOPE_THRESHHOLD)
-                            R_integrated = float(b_integral) / float(a_integral)
+                            unsub_integral = integrateTimeSeries(x, unsub_y, windowLength= WINDOW_LENGTH, nanReplacer= NAN_REPLACER, slopeThreshhold=SLOPE_THRESHHOLD)
+                            sub_integral =  integrateTimeSeries(x, sub_y, windowLength= WINDOW_LENGTH, nanReplacer= NAN_REPLACER, slopeThreshhold=SLOPE_THRESHHOLD)
+                            R_integrated = float(unsub_integral) / float(sub_integral)
                             rtnDict[massStr][header]['Ratio_Integrated'] = R_integrated
     return rtnDict
 
