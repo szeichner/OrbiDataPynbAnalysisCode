@@ -1,7 +1,7 @@
 ##!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Last Modified: Friday Nov 13, 2020
+Last Modified: Thursday Nov 19, 2020
 @author: sarahzeichner
 
 This code has all of the data processing code, to take data after it has been processed by FT statistic (or equivalent) and calculate isotope ratios based on input
@@ -152,7 +152,7 @@ def calculate_Counts_And_ShotNoise(peakDF,CN=4.4,z=1,RN=120000,Microscans=1):
                         peakDF['peakNoise']) * (CN/z) *(RN/peakDF['ftRes'])**(0.5) * Microscans**(0.5)
     return peakDF
 
-def calc_Append_Ratios(singleDf, allBelowOne = True, isotopeList = ['13C','15N','UnSub']):
+def calc_Append_Ratios(singleDf, allBelowOne = True, isotopeList = ['UnSub', '15N',  '13C']):
     '''
     Calculates both 15N and 13C ratios, writes them such that they are < 1, and adds them to the dataframe.
     Inputs:                               
@@ -292,7 +292,6 @@ def cull_Zero_Scans(df):
     Outputs:
         culled df without zero
     '''
-    indexNames = df[(df['counts'] == 0)].index
     df = df[~(df == 0).any(axis=1)]
     return df
 
@@ -455,8 +454,6 @@ def calc_Raw_File_Output(dfList, isotopeList = ['13C','15N','UnSub'],omitRatios 
                             R_integrated = float(unsub_integral) / float(sub_integral)
                             rtnDict[massStr][header]['Ratio_Integrated'] = R_integrated
     return rtnDict
-
-
 
 def calc_Folder_Output(folderPath, cullOn=None, cullZeroScansOn=False, gcElutionOn=False, gcElutionTimes = [],  cullAmount=2, isotopeList = ['13C','15N','UnSub'], NL_over_TIC=0.10, omitRatios = [], fileCsvOutputPath=None):
     '''
