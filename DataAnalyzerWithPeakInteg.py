@@ -20,7 +20,7 @@ import io
 from collections import Counter
 from scipy.stats import norm
 from scipy.optimize import curve_fit
-from scipy.integrate import simps
+import scipy.integrate 
 
 #####################################################################
 ########################## CONSTANTS ################################
@@ -333,11 +333,10 @@ def gaussian(x, a, b, c):
     Outputs: 
        gaussian fit
     '''    
-    return a*np.exp(-np.power(x - b, 2)/(2*np.power(c, 2)))
+    return a*np.exp(-np.power(x - b, 2)/(2*np.power(c, 2))) #a * x + b * x**2 + c  
 
 def integrateTimeSeries(x, y, windowLength = 5, nanReplacer = 0.000001, slopeThreshhold =  0.08):
     '''
-
     Integrates a gaussian peak to return an area
 
     Inputs: 
@@ -349,30 +348,25 @@ def integrateTimeSeries(x, y, windowLength = 5, nanReplacer = 0.000001, slopeThr
     Outputs: 
        area = area under integrated gaussian peak
     '''    
-
     data = {'x':x, 'y':y}
-    df = pd.DataFrame(data)
-    df['slope'] = df['y'].rolling(windowLength).apply(calc_slope)
-    df['slope'] = df['slope'].fillna(nanReplacer)
-    df['abs_slope'] =  abs(df['slope'])
 
     #Find threshhold and choose subset of data based on slope threshhold
-    df = df[df['abs_slope'] > slopeThreshhold] 
+    #df = pd.DataFrame(data)
+    #df['slope'] = df['y'].rolling(windowLength).apply(calc_slope)
+    #df['slope'] = df['slope'].fillna(nanReplacer)
+    #df['abs_slope'] =  abs(df['slope'])
+    #df = df[df['abs_slope'] > slopeThreshhold] 
 
-    #Fit a gaussian to the data
-    popt, pcov = curve_fit(gaussian, df['x'], df['y'])
-    plt.scatter(x, y)
-    plt.plot(df['x'], gaussian(df['x'], *popt), 'g--', 
-         label='fit: a=%5.3f, b=%5.3f, c=%5.3f' % tuple(popt))
-    plt.xlabel('x')
-    plt.ylabel('y')
-    plt.legend()
-    plt.show()
+    #Plot the data
+    #plt.scatter(x, y)
+    #plt.xlabel('x')
+    #plt.ylabel('y')
+    #plt.legend()
+    #plt.show()
 
-    #integrate the polynomial to get area under the curve
-    area = simps(gaussian(data['x'], *popt))
-    return area
-
+    #Integrate the data
+    y_int = scipy.integrate.trapz(y, x)
+    return y_int
     
 def calc_Raw_File_Output(dfList, isotopeList = ['13C','15N','UnSub'],omitRatios = []):
     '''
@@ -450,8 +444,8 @@ def calc_Raw_File_Output(dfList, isotopeList = ['13C','15N','UnSub'],omitRatios 
 
                             #Integrate the curves based on the time frame chosen and return that R value
                             unsub_integral = integrateTimeSeries(x, unsub_y, windowLength= WINDOW_LENGTH, nanReplacer= NAN_REPLACER, slopeThreshhold=SLOPE_THRESHHOLD)
-                            sub_integral =  integrateTimeSeries(x, sub_y, windowLength= WINDOW_LENGTH, nanReplacer= NAN_REPLACER, slopeThreshhold=SLOPE_THRESHHOLD)
-                            R_integrated = float(unsub_integral) / float(sub_integral)
+                            sub_integral = integrateTimeSeries(x, sub_y, windowLength= WINDOW_LENGTH, nanReplacer= NAN_REPLACER, slopeThreshhold=SLOPE_THRESHHOLD)
+                            R_integrated = float(sub_integral) / float(unsub_integral)
                             rtnDict[massStr][header]['Ratio_Integrated'] = R_integrated
     return rtnDict
 
@@ -480,7 +474,7 @@ def calc_Folder_Output(folderPath, cullOn=None, cullZeroScansOn=False, gcElution
     ratio = "Ratio"
     stdev = "StdDev"
     rtnAllFilesDF = []
-    header = ["FileNumber", "Fragment", "IsotopeRatio", "IntegratedIsotopeRatio" "Average", "StdDev", "StdError", "RelStdError","TICVar","TIC*ITVar","TIC*ITMean", 'ShotNoise']
+    header = ["FileNumber", "Fragment", "IsotopeRatio", "IntegratedIsotopeRatio", "Average", "StdDev", "StdError", "RelStdError","TICVar","TIC*ITVar","TIC*ITMean", 'ShotNoise']
     #get all the file names in the folder with the same end 
     fileNames = [x for x in os.listdir(folderPath) if x.endswith(".xlsx")]
     peakNumber = 0
@@ -527,7 +521,7 @@ def calc_Folder_Output(folderPath, cullOn=None, cullZeroScansOn=False, gcElution
     #we can now calculate average, stdev, relstdev for each fragment across replicate measurements 
     if len(fileNames)>1: #only calculate  stats if there is more than one file
         avgDF = rtnAllFilesDF.groupby(['Fragment', 'IsotopeRatio'])["Average"].mean()
-        integratedAvgDF = rtnAllFilesDF.groupby(['Fragment', 'IntegratedIsotopeRatio'])["Average"].mean()
+        integratedAvgDF = rtnAllFilesDF.groupby(['Fragment', 'IsotopeRatio'])["IntegratedIsotopeRatio"].mean()
         countDF = rtnAllFilesDF.groupby(['Fragment', 'IsotopeRatio'])["Average"].count()
         stdDF = rtnAllFilesDF.groupby(['Fragment', 'IsotopeRatio'])["Average"].std()
         sqrtCountDF = np.power(countDF, 0.5)
@@ -540,118 +534,3 @@ def calc_Folder_Output(folderPath, cullOn=None, cullZeroScansOn=False, gcElution
     statsDF.to_csv(str(folderPath + '/' + "stats_output.csv"), index = True, header=True)
    
     return rtnAllFilesDF, statsDF
-           
-def plot_Output(output,isotopeList = ['13C','15N','UnSub'],omitRatios = [],numCols = 2,widthMultiple = 4, heightMultiple = 4):
-   #TODO: Fix this for the gc weighted average calculation
-    '''
-    Constructs a series of output plots for easy visualization
-    
-    Inputs: 
-        output: The output dictionary from _calcOutput
-        isotopeList: A list of isotopes corresponding to the peaks extracted by FTStat, in the order they were extracted. This must be the same for each fragment. This is used to determine all ratios of interest, i.e. 13C/UnSub, and label them in the proper order. 
-        omitRatios: A list of ratios to ignore. I.e. by default, the script will report 13C/15N ratios, which one may not care about. In this case, the list should be ['13C/15N','15N/13C'], including both versions, to avoid errors. 
-        numCols: The number of columns in the output plot
-        widthMultiple: A factor which determines how wide the output plot is; higher is wider. This can be adjusted to make the plot appear nice, and may have to be changed based on how many ratios one is extracting. 
-        heightMultiple: AS widthmultiple, but for height. 
-        
-    Outputs:
-        None. Constructs and displays a plot visualizing the output data. 
-    '''
-    
-    #Generate unique headers from list. Each must have two versions, normal and inverse. List of tuples
-    headerList = []
-    for i in range(len(isotopeList)):
-        for j in range(len(isotopeList)):
-            if j>i:
-                normal = isotopeList[i] + '/' + isotopeList[j]
-                inverse = isotopeList[j] + '/' + isotopeList[i]
-                
-                if normal not in omitRatios and inverse not in omitRatios:
-                    headerList.append((normal,inverse))
-    
-    #Determine the number of plots based on the number of headers. Initialize figure
-    numPlots = len(headerList) * 3
-    numRows = numPlots // numCols + (numPlots % numCols > 0)
-    fig, axes = plt.subplots(numRows, numCols, figsize = (numCols*widthMultiple, numRows*heightMultiple))
-    row, col = 0, 0
-    
-    #For each header, iterate by fragments and pull information from output dictionary. 
-    for header in headerList:
-        PlotDict = {'Mass':[],'ShotNoise':[],'Error':[],'ErrorShotNoiseRat':[],'Ratio':[],'Type':[]}
-        for fragment in output.items():
-            if header[0] in fragment[1]:
-                currentHeader = header[0]
-            elif header[1] in fragment[1]:
-                currentHeader = header[1]
-            else:
-                raise Exception('Current header is not in output' + str(header) + 'Try adding it to omitRatios')
-                
-            PlotDict['Mass'].append(fragment[0])
-            PlotDict['ShotNoise'].append(fragment[1][currentHeader]['ShotNoiseLimit by Quadrature'])
-            PlotDict['Error'].append(fragment[1][currentHeader]['RelStError'])
-            PlotDict['ErrorShotNoiseRat'] = [a / b for a, b in zip(PlotDict['Error'], PlotDict['ShotNoise'])]
-            PlotDict['Ratio'].append(fragment[1][currentHeader]['Ratio'])
-            PlotDict['Type'].append(currentHeader)
-
-        #Determine whether normal or inverse ratios are more common, and change all ratios to this format
-        mode = Counter(PlotDict['Type'])
-        modeStr = mode.most_common(1)[0][0]
-
-        flippedRatios = []
-        for index in range(len(PlotDict['Ratio'])):
-            if PlotDict['Type'][index] == modeStr:
-                flippedRatios.append(PlotDict['Ratio'][index])
-            else:
-                flippedRatios.append(1/PlotDict['Ratio'][index])
-                print('Flipping Ratio' + str(PlotDict['Mass'][index]))
-                
-        xs = np.arange(len(PlotDict['Mass']))
-
-        #Makes three plots for each isotope
-        axes[row, col].set_xticks(xs)
-        axes[row, col].set_xticklabels(PlotDict['Mass'])
-        axes[row, col].scatter(xs, PlotDict['ShotNoise'], facecolors = 'none', edgecolors = 'k', label = 'Shot Noise')
-        axes[row, col].scatter(xs, PlotDict['Error'], c='k', marker="o", label='Error')
-        axes[row, col].legend()
-        axes[row, col].set_ylim(0, axes[row, col].get_ylim()[1]*0.6)
-        axes[row, col].set_title('Relative Standard Error vs Shot Noise, ' + modeStr)
-        axes[row, col].set_xlabel('Fragment')
-        axes[row, col].set_ylabel('Value')
-        maxRSE = max(PlotDict['Error'])
-        axes[row, col].set_ylim(0, 1.2 * maxRSE)
-
-        if col == numCols - 1:
-            row += 1
-            col = 0
-        else: 
-            col += 1
-
-        axes[row, col].set_xticks(xs)
-        axes[row, col].set_xticklabels(PlotDict['Mass'])
-        axes[row, col].scatter(xs, PlotDict['ErrorShotNoiseRat'], c= 'k', marker = 'o', label = 'Ratios')
-        axes[row, col].axhline(y=2,color = 'r',linestyle = '--', label = 'Accuracy target')
-        axes[row, col].legend()
-        axes[row, col].set_title('Ratio RelStandardError to Shot Noise, ' + modeStr)
-        axes[row, col].set_xlabel('Fragment')
-        axes[row, col].set_ylabel('Ratio')
-
-        if col == numCols - 1:
-            row += 1
-            col = 0
-        else: 
-            col += 1
-
-        axes[row, col].set_xticks(xs)
-        axes[row, col].set_xticklabels(PlotDict['Mass'])
-        axes[row, col].scatter(xs, flippedRatios, c= 'k', marker = 'o', label = 'Ratios')
-        axes[row, col].set_title('Ratios of ' + modeStr)
-        axes[row, col].set_xlabel('Fragment')
-        axes[row, col].set_ylabel('Ratio')
-
-        if col == numCols - 1:
-            row += 1
-            col = 0
-        else: 
-            col += 1
-
-    plt.tight_layout()

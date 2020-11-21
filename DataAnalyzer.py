@@ -389,7 +389,7 @@ def calc_Raw_File_Output(dfList, weightByNLHeight=False, isotopeList = ['13C','1
 
     return rtnDict
 
-def calc_Folder_Output(folderPath, cullOn=None, cullZeroScansOn=False, gcElutionOn=False, weightByNLHeight=False, gcElutionTimes = [],  cullAmount=2, isotopeList = ['13C','15N','UnSub'], NL_over_TIC=0.10, omitRatios = [], fileCsvOutputPath=None):
+def calc_Folder_Output(folderPath, cullOn=None, cullZeroScansOn=False, gcElutionOn=False, weightByNLHeight=False, gcElutionTimes = [],  cullAmount=2, isotopeList = ['UnSub', '15N', '13C'], NL_over_TIC=0.10, omitRatios = [], fileCsvOutputPath=None):
     '''
     For each raw file in a folder, calculate mean, stdev, SErr, RSE, and ShotNoise based on counts. Outputs these in a dictionary which organizes by fragment (i.e different entries for fragments at 119 and 109).  
     Inputs:
