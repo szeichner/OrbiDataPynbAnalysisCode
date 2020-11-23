@@ -9,7 +9,7 @@ Last Modified: Thursday, Nov 19 2020
 import DataAnalyzerWithPeakInteg
 
 #Specify what folder contains the files to be analyzed
-inputStandardFolder = "/Users/sarahzeichner/Documents/Caltech/Research/Direct Injection/DirectInjectionData/direct injection reanalysis/major peaks/standard"
+inputStandardFolder = "/Users/sarahzeichner/Documents/Caltech/Research/Direct Injection/DirectInjectionData/direct injection reanalysis/old analysis/sample_105_180"
 
 #Specify the order of isotopes as extracted from FT statistic
 isotopeList = ['UnSub','15N','13C']
@@ -19,8 +19,8 @@ isotopeList = ['UnSub','15N','13C']
 gc_elution_on = True
 
 #Specify the time frame of each eluted peak
-#peakTimeFrames = [(7.85, 8.12), (10,10.12), (12.37,12.56)] #sample mixture
-peakTimeFrames = [(7.85, 8.12), (10,10.12), (10.21, 10.4), (12.37,12.56)] #standard mixture
+#peakTimeFrames = [(6.65,6.78),(7.85, 8.12), (10,10.12),(12.37,12.56)] #sample mixture
+peakTimeFrames = [(6.65,6.78),(7.85, 8.12), (10,10.12), (10.21, 10.4),(12.37,12.56)] #standard mixture
 #peakTimeFrames = [(6.65,6.78)] #alanine
 #peakTimeFrames = [(10,10.12),(10,10.12),(10,10.12),(10,10.12),(10,10.12),(10,10.12),(10,10.12)] #aspartic
 #peakTimeFrames = [(12.37,12.56),(12.37,12.56),(12.37,12.56),(12.37,12.56),(12.37,12.56), (12.37,12.56)] #methionine

@@ -445,7 +445,13 @@ def calc_Raw_File_Output(dfList, isotopeList = ['13C','15N','UnSub'],omitRatios 
                             #Integrate the curves based on the time frame chosen and return that R value
                             unsub_integral = integrateTimeSeries(x, unsub_y, windowLength= WINDOW_LENGTH, nanReplacer= NAN_REPLACER, slopeThreshhold=SLOPE_THRESHHOLD)
                             sub_integral = integrateTimeSeries(x, sub_y, windowLength= WINDOW_LENGTH, nanReplacer= NAN_REPLACER, slopeThreshhold=SLOPE_THRESHHOLD)
-                            R_integrated = float(sub_integral) / float(unsub_integral)
+
+                            try:
+                                R_integrated = float(sub_integral) / float(unsub_integral)
+                            except:
+                                print("R_integrated gave NaN for peak:" + str(key))
+                                R_integrated = 0
+
                             rtnDict[massStr][header]['Ratio_Integrated'] = R_integrated
     return rtnDict
 
