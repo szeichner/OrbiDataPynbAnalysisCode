@@ -480,7 +480,8 @@ def calc_Folder_Output(folderPath, cullOn=None, cullZeroScansOn=False, gcElution
     ratio = "Ratio"
     stdev = "StdDev"
     rtnAllFilesDF = []
-    header = ["FileNumber", "Fragment", "IsotopeRatio", "IntegratedIsotopeRatio", "Average", "StdDev", "StdError", "RelStdError","TICVar","TIC*ITVar","TIC*ITMean", 'ShotNoise']
+    header = ["FileNumber", "Fragment", "IsotopeRatio", "IntegratedIsotopeRatio", "Average", \
+        "StdDev", "StdError", "RelStdError","TICVar","TIC*ITVar","TIC*ITMean", 'ShotNoise']
     #get all the file names in the folder with the same end 
     fileNames = [x for x in os.listdir(folderPath) if x.endswith(".xlsx")]
     peakNumber = 0
@@ -491,7 +492,9 @@ def calc_Folder_Output(folderPath, cullOn=None, cullZeroScansOn=False, gcElution
         print(thisFileName) #for debugging
         thesePeaks = import_Peaks_From_FTStatFile(thisFileName)
         thisPandas = convert_To_Pandas_DataFrame(thesePeaks)
-        thisMergedDF = combine_Substituted_Peaks(peakDF=thisPandas,cullOn=cullOn, cullZeroScansOn = cullZeroScansOn, gc_elution_on=gcElutionOn, gc_elution_times=gcElutionTimes, cullAmount=cullAmount, isotopeList=isotopeList, NL_over_TIC=NL_over_TIC, csv_output_path=fileCsvOutputPath)
+        thisMergedDF = combine_Substituted_Peaks(peakDF=thisPandas,cullOn=cullOn, cullZeroScansOn = cullZeroScansOn, \
+                gc_elution_on=gcElutionOn, gc_elution_times=gcElutionTimes, cullAmount=cullAmount, isotopeList=isotopeList, \
+                NL_over_TIC=NL_over_TIC, csv_output_path=fileCsvOutputPath)
         thisOutput = calc_Raw_File_Output(thisMergedDF, isotopeList, omitRatios)
         keys = list(thisOutput.keys())
         peakNumber = len(keys)
@@ -513,7 +516,8 @@ def calc_Folder_Output(folderPath, cullOn=None, cullZeroScansOn=False, gcElution
                 thisTICITVar = thisOutput[thisPeak][thisRatio]["TIC*ITVar"]
                 thisTICITMean = thisOutput[thisPeak][thisRatio]["TIC*ITMean"]
                 thisShotNoise = thisOutput[thisPeak][thisRatio]["ShotNoiseLimit by Quadrature"]
-                thisRow = [thisFileName, thisPeak, thisRatio, thisRIntegratedVal, thisRVal, thisStdDev, thisStError,thisRelStError,thisTICVar,thisTICITVar,thisTICITMean, thisShotNoise] 
+                thisRow = [thisFileName, thisPeak, thisRatio, thisRIntegratedVal, thisRVal, \
+                    thisStdDev, thisStError,thisRelStError,thisTICVar,thisTICITVar,thisTICITMean, thisShotNoise] 
                 rtnAllFilesDF.append(thisRow)
 
     rtnAllFilesDF = pd.DataFrame(rtnAllFilesDF)
@@ -530,11 +534,17 @@ def calc_Folder_Output(folderPath, cullOn=None, cullZeroScansOn=False, gcElution
         integratedAvgDF = rtnAllFilesDF.groupby(['Fragment', 'IsotopeRatio'])["IntegratedIsotopeRatio"].mean()
         countDF = rtnAllFilesDF.groupby(['Fragment', 'IsotopeRatio'])["Average"].count()
         stdDF = rtnAllFilesDF.groupby(['Fragment', 'IsotopeRatio'])["Average"].std()
+        trapStdDF = rtnAllFilesDF.groupby(['Fragment', 'IsotopeRatio'])["IntegratedIsotopeRatio"].std()
         sqrtCountDF = np.power(countDF, 0.5)
         stdErrorDF = np.divide(stdDF, sqrtCountDF)
+        trapStdErrorDF = np.divide(trapStdDF, sqrtCountDF)
         relStdErrorDF = np.divide(stdErrorDF, avgDF)
+        trapRelStdErrorDF = np.divide(trapStdErrorDF, integratedAvgDF)
 
-    statsDF = pd.DataFrame([avgDF, integratedAvgDF, countDF, stdDF, stdErrorDF, relStdErrorDF], index=["Avg R Val", "Integrated Avg R val", "N", "StdDev", "StdError", "RelStdError"]) 
+    statsDF = pd.DataFrame([avgDF, integratedAvgDF, countDF, stdDF, stdErrorDF, \
+        relStdErrorDF, trapStdDF, trapStdErrorDF, trapRelStdErrorDF], \
+            index=["ScanByScan Avg R Val", "TrapRule Avg R val", "N", "ScanStdDev", "ScanStdError", \
+                "ScanRelStdError", "TrapStdDev", "TrapStdError", "TrapRelStdError"]) 
     
     #output results to csv
     statsDF.to_csv(str(folderPath + '/' + "stats_output.csv"), index = True, header=True)
