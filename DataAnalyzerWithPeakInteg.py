@@ -29,6 +29,7 @@ import scipy.integrate
 WINDOW_LENGTH  = 5
 SLOPE_THRESHHOLD = 0.008
 NAN_REPLACER = 0.0000001
+TRAP_RULE_BOOL = False
 
 #####################################################################
 ########################## FUNCTIONS ################################
@@ -148,8 +149,11 @@ def calculate_Counts_And_ShotNoise(peakDF,CN=4.4,z=1,RN=120000,Microscans=1):
     Outputs: 
         The inputDF, with a column for 'counts' added. 
     '''
+    
+    #peakDF['counts'] = peakDF['absIntensity']  #NOTE: Uncomment this to test just NL score for ratios
+
     peakDF['counts'] = (peakDF['absIntensity'] /
-                        peakDF['peakNoise']) * (CN/z) *(RN/peakDF['ftRes'])**(0.5) * Microscans**(0.5)
+                  peakDF['peakNoise']) * (CN/z) *(RN/peakDF['ftRes'])**(0.5) * Microscans**(0.5)
     return peakDF
 
 def calc_Append_Ratios(singleDf, allBelowOne = True, isotopeList = ['UnSub', '15N',  '13C']):
@@ -171,14 +175,26 @@ def calc_Append_Ratios(singleDf, allBelowOne = True, isotopeList = ['UnSub', '15
                     #determine which has more counts, set ratio accordingly
                     if singleDf['counts' + isotopeList[i]].sum() <= singleDf['counts' + isotopeList[j]].sum():
                         singleDf[isotopeList[i] + '/' + isotopeList[j]] = singleDf['counts' + isotopeList[i]] / singleDf['counts' + isotopeList[j]]
+                        
+                        #output timing of maximum peak to console for debugging
+                        print(str(isotopeList[i]) + "timing: " + str(singleDf[['counts' + isotopeList[i]]].idxmax()))
+                        print(str(isotopeList[j]) + "timing: " + str(singleDf[['counts' + isotopeList[j]]].idxmax()))
+
                     else:
                         singleDf[isotopeList[j] + '/' + isotopeList[i]] = singleDf['counts' + isotopeList[j]] / singleDf['counts' + isotopeList[i]]
-         
+
+                        #output timing of maximum peak to console for debugging
+                        print(str(isotopeList[i]) + "timing: " + str(singleDf[['counts' + isotopeList[i]]].idxmax()))
+                        print(str(isotopeList[j]) + "timing: " + str(singleDf[['counts' + isotopeList[j]]].idxmax()))
     else:
         for i in range(len(isotopeList)):
             for j in range(len(isotopeList)):
                 if j>i:
                     singleDf[isotopeList[i] + '/' + isotopeList[j]] = singleDf['counts' + isotopeList[i]] / singleDf['counts' + isotopeList[j]]
+
+                    #output timing of maximum peak to console for debugging
+                    print(str(isotopeList[i]) + "timing: " + str(singleDf[['counts' + isotopeList[i]]].idxmax()))
+                    print(str(isotopeList[j]) + "timing: " + str(singleDf[['counts' + isotopeList[j]]].idxmax()))
     return singleDf
 
 def combine_Substituted_Peaks(peakDF, cullOn = [], cullZeroScansOn = False, gc_elution_on = False, gc_elution_times = [], cullAmount = 2, isotopeList = ['13C','15N','UnSub'], NL_over_TIC = 0.10, csv_output_path=None):
@@ -277,10 +293,11 @@ def combine_Substituted_Peaks(peakDF, cullOn = [], cullZeroScansOn = False, gc_e
             
             #Adds the combined dataframe to the output list
             DFList.append(df1)
-            #Test by writing to CSV, in case you want to check the output
-            if csv_output_path != None:
-                df1.to_csv(csv_output_path, index=True, header=True)
- 
+            #NOTE: Test by writing to CSV, in case you want to check the output
+            #if csv_output_path != None:
+            csv_output_path = "/Users/sarahzeichner/Documents/Caltech/Research/Direct Injection/DirectInjectionData/Chimiak Dallas Alanine direct injections 2016/test.csv"
+            df1.to_csv(csv_output_path, index=True, header=True)
+            #print("done")
         else:
             pass
     return DFList
@@ -306,6 +323,9 @@ def cull_On_GC_Peaks(df, gcElutionTimeFrame = (0,0), NL_over_TIC=0.1):
     '''
     # get the scan numbers for the retention  time frame
     if gcElutionTimeFrame != (0,0):
+
+        #cull based on passed in retention time... 
+        #this  could be a place in the future to cull based on automatic peak detection
         df = df[df['retTime'].between(gcElutionTimeFrame[0], gcElutionTimeFrame[1], inclusive=True)]
     return df
 
@@ -365,8 +385,10 @@ def integrateTimeSeries(x, y, windowLength = 5, nanReplacer = 0.000001, slopeThr
     #plt.show()
 
     #Integrate the data
-    y_int = scipy.integrate.trapz(y, x)
-    return y_int
+    y_trap_int = scipy.integrate.trapz(y, x)
+    y_sum_int = sum(y)
+    # add logic to sum counts
+    return y_trap_int, y_sum_int
     
 def calc_Raw_File_Output(dfList, isotopeList = ['13C','15N','UnSub'],omitRatios = []):
     '''
@@ -443,8 +465,17 @@ def calc_Raw_File_Output(dfList, isotopeList = ['13C','15N','UnSub'],omitRatios 
                             sub_y = dfList[fragmentIndex]['counts' + isotopeList[j]]
 
                             #Integrate the curves based on the time frame chosen and return that R value
-                            unsub_integral = integrateTimeSeries(x, unsub_y, windowLength= WINDOW_LENGTH, nanReplacer= NAN_REPLACER, slopeThreshhold=SLOPE_THRESHHOLD)
-                            sub_integral = integrateTimeSeries(x, sub_y, windowLength= WINDOW_LENGTH, nanReplacer= NAN_REPLACER, slopeThreshhold=SLOPE_THRESHHOLD)
+                            unsub_trap_integral, unsub_sum_integral = integrateTimeSeries(x, unsub_y, windowLength= WINDOW_LENGTH, nanReplacer= NAN_REPLACER, slopeThreshhold=SLOPE_THRESHHOLD)
+                            sub_trap_integral, sub_sum_integral = integrateTimeSeries(x, sub_y, windowLength= WINDOW_LENGTH, nanReplacer= NAN_REPLACER, slopeThreshhold=SLOPE_THRESHHOLD)
+
+                            if TRAP_RULE_BOOL == True:
+                                sub_integral =sub_trap_integral 
+                                unsub_integral = unsub_trap_integral
+                            else:
+                                sub_integral = sub_sum_integral 
+                                unsub_integral = unsub_sum_integral
+                            
+
 
                             try:
                                 R_integrated = float(sub_integral) / float(unsub_integral)
