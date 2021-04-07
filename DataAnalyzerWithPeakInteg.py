@@ -12,7 +12,6 @@ import matplotlib
 import csv
 import os
 import numpy as np
-import xlrd
 import pandas as pd
 import math 
 import matplotlib.pyplot as plt
@@ -22,6 +21,7 @@ from collections import Counter
 from scipy.stats import norm
 from scipy.optimize import curve_fit
 import scipy.integrate 
+import openpyxl
 
 #####################################################################
 ########################## CONSTANTS ################################
@@ -49,59 +49,57 @@ def import_Peaks_From_FTStatFile(inputFileName):
         this has a dictionary for each indvidual scan, giving a bunch of data about that scan. 
     '''
 
-    # Open the worksheet with xlrd
-    wb = xlrd.open_workbook(inputFileName)
-    ws = wb.sheet_by_index(0)
-
+    wb = openpyxl.load_workbook(inputFileName)
+    ws = wb.active
+    
     # list containing packets containing dicts of microscans for each measured peak
     peaks = []
-    onMicroScans = False
+    onMicroScans = False    
 
-    for r in range(ws.nrows)[2:]:
-        if 'Tolerance:' in ws.row_values(r):
+    for i, row in enumerate(ws.iter_rows(min_row=1,max_row=ws.max_row, values_only=True)):
+        r = i+1 # r is row number in spreadsheet
+        if 'Tolerance:' in row:
             peaks.append({})
             # Get the tolerance
             try:
-                tol = float(ws.cell_value(r, 1).strip(' ppm'))
+                tol = float(ws.cell(r,2).value.strip(' ppm'))
             except:
-                tol = float(ws.cell_value(r, 1).strip(' mmu'))
+                tol = float(ws.cell(r,2).value.strip(' mmu'))
             # Get the last scan of microscan packets
-            lastScan = int(ws.cell_value(r, 7))
+            lastScan = int(ws.cell(r,8).value)
             # Get the ref mass
-            refMass = float(ws.cell_value(r, 9))
+            refMass = float(ws.cell(r,10).value)
             peaks[-1] = {'tolerance': tol, 'lastScan': lastScan,
-                         'refMass': refMass, 'scans': []}
+                      'refMass': refMass, 'scans': []}
             continue
-
-        if 'Measured Mass:' and 'Ret. Time:' in ws.row_values(r):
+            
+        if 'Measured Mass:' in row:
             # Saving rows to know what goes in each column (in case of changes later in the sheet)
-            colIndex = ws.row_values(r)
+            colIndex = row
             onMicroScans = True
             continue
+                    
         if onMicroScans:
-            if 'Aver:' in ws.row_values(r):
+            if 'Aver:' in row:
                 onMicroScans = False
                 continue
-            measuredMass = ws.cell_value(r, colIndex.index('Measured Mass:'))
-            retTime = ws.cell_value(r, colIndex.index('Ret. Time:'))
-            scanNumber = ws.cell_value(r, colIndex.index('Scan Number:'))
-            absIntensity = ws.cell_value(r, colIndex.index('Abs. Intensity:'))
-            integrationTime = ws.cell_value(r, colIndex.index('IT [ms]:'))
-            ftResolution = ws.cell_value(r, colIndex.index('FT Resolution:'))
-            peakNoise = ws.cell_value(r, colIndex.index('Peak Noise'))
-            totalIonCount = ws.cell_value(r, colIndex.index('TIC:'))
-            ticTimesIT = ws.cell_value(r, colIndex.index('TIC*IT:'))
-            peakResolution = ws.cell_value(
-                r, colIndex.index('Peak Resolution'))
-            peakBaseline = ws.cell_value(r, colIndex.index('Peak Baseline'))
+            measuredMass    = ws.cell(r, colIndex.index('Measured Mass:')+1).value
+            retTime         = ws.cell(r, colIndex.index('Ret. Time:')+1).value
+            scanNumber      = ws.cell(r, colIndex.index('Scan Number:')+1).value
+            absIntensity    = ws.cell(r, colIndex.index('Abs. Intensity:')+1).value
+            integrationTime = ws.cell(r, colIndex.index('IT [ms]:')+1).value
+            ftResolution    = ws.cell(r, colIndex.index('FT Resolution:')+1).value
+            peakNoise       = ws.cell(r, colIndex.index('Peak Noise')+1).value
+            totalIonCount   = ws.cell(r, colIndex.index('TIC:')+1).value
+            ticTimesIT      = ws.cell(r, colIndex.index('TIC*IT:')+1).value
+            peakResolution  = ws.cell(r, colIndex.index('Peak Resolution')+1).value
+            peakBaseline    = ws.cell(r, colIndex.index('Peak Baseline')+1).value
             if measuredMass == '' and retTime == '' and scanNumber == '':
                 continue
             if scanNumber == lastScan:
                 onMicroScans = False
             peaks[-1]['scans'].append(({'mass': measuredMass, 'retTime': retTime, 'tic': totalIonCount,
-                                        'scanNumber': scanNumber, 'absIntensity': absIntensity, 'integTime': integrationTime,\
-                                        'TIC*IT': ticTimesIT,'ftRes': ftResolution, 'peakNoise': peakNoise, 'peakRes': peakResolution, \
-                                        'peakBase': peakBaseline}))
+                                        'scanNumber': scanNumber, 'absIntensity': absIntensity, 'integTime': integrationTime,'TIC*IT': ticTimesIT,'ftRes': ftResolution, 'peakNoise': peakNoise, 'peakRes': peakResolution, 'peakBase': peakBaseline}))
     return(peaks)
 
 def convert_To_Pandas_DataFrame(peaks):
@@ -151,8 +149,8 @@ def calculate_Counts_And_ShotNoise(peakDF,resolution=120000,CN=4.4,z=1,Microscan
     Outputs: 
         The inputDF, with a column for 'counts' added. 
     '''
-    
-    #peakDF['counts'] = peakDF['absIntensity']  #NOTE: Uncomment this to test just NL score for ratios
+    #NOTE: Uncomment this to test just NL score for ratios
+    #peakDF['counts'] = peakDF['absIntensity']  
 
     peakDF['counts'] = (peakDF['absIntensity'] /
                   peakDF['peakNoise']) * (CN/z) *(resolution/peakDF['ftRes'])**(0.5) * Microscans**(0.5)
@@ -165,15 +163,9 @@ def calc_Append_Ratios(singleDf, allBelowOne = True, isotopeList = ['UnSub', '15
             singleDF: An individual pandas dataframe, consisting of multiple peaks from FTStat combined into one dataframe by the _combinedSubstituted function.
             allBelowOne: if True, outputs ratios as 'Sub/unSub' or 'unSub/Sub', whichever is below 1. If false, outputs
             all as 'sub/unSub'. 
-<<<<<<< HEAD
-            isotopeList: A list of isotopes corresponding to the peaks extracted by FTStat for this fragment, in the order they were extracted. 
-            debug: Toggle to allow user to print outputs for debugging
-                                
-=======
             isotopeList: A list of isotopes corresponding to the peaks extracted by FTStat, in the order they were extracted. 
                             This must be the same for each fragment. This is used to determine all ratios of interest, i.e. 13C/UnSub, and label them in the proper order. 
             
->>>>>>> parent of 1219395... main data analysis; visualization; tests
     Outputs:
             The dataframe with ratios added. It computes all ratios, because why not. 
     '''
@@ -226,13 +218,8 @@ def combine_Substituted_Peaks(peakDF, cullOn = [], cullZeroScansOn = False, base
         cullAmount: A number of standard deviations from the mean. If an individual scan has the cullOn variable outside of this range, culls the scan; 
                     i.e. if cullOn is 'TIC*IT' and cullAmount is 3, culls scans where TIC*IT is more than 3 standard deviations from its mean. 
         NL_over_TIC: specific NL/TIC that designates what a "peak" should look like. default 0.1, currently not implemented
-<<<<<<< HEAD
-        fragmentIsotopeList: A list of lists, where each interior list corresponds to a peak and gives the isotopes corresponding to the peaks extracted by FTStat, in the order they were extracted. This is used to determine all ratios of interest, i.e. 13C/UnSub, and label them in the proper order. 
-        debug: Added to allow user to print output within called function for debugging (calc_Append_Ratios)
-=======
         isotopeList: A list of isotopes corresponding to the peaks extracted by FTStat, in the order they were extracted. This must be the same for each fragment. 
                     This is used to determine all ratios of interest, i.e. 13C/UnSub, and label them in the proper order. 
->>>>>>> parent of 1219395... main data analysis; visualization; tests
 
     Outputs: 
         A list of combined dataframes; in the 119/109 example above, it will output a list of two dataframes, [119, 109]
@@ -407,11 +394,6 @@ def calc_Raw_File_Output(dfList, isotopeList = ['13C','15N','UnSub'],omitRatios 
                     This must be the same for each fragment. This is used to determine all ratios of interest, i.e. 13C/UnSub, and label them in the proper order. 
         omitRatios: A list of ratios to ignore. I.e. by default, the script will report 13C/15N ratios, which one may not care about. 
                     In this case, the list should be ['13C/15N','15N/13C'], including both versions, to avoid errors. 
-<<<<<<< HEAD
-        weightByNLHeight: Used to say whether to weight by NL height or not. Tim: 20210330: Added this as the weightByNLHeight does not yet work with M+N routines. 
-        debug: Turn on to print output to console for debugging
-=======
->>>>>>> parent of 1219395... main data analysis; visualization; tests
          
     Outputs: 
         A dictionary giving mean, stdev, StandardError, relative standard error, and shot noise limit for all peaks.  
@@ -426,76 +408,6 @@ def calc_Raw_File_Output(dfList, isotopeList = ['13C','15N','UnSub'],omitRatios 
         key = round(dfList[fragmentIndex]['massUnSub'].mean())
         massStr = str(key)
         
-<<<<<<< HEAD
-    for i in range(len(isotopeList)):
-        for j in range(len(isotopeList)):
-            if j>i:
-                if isotopeList[i] + '/' + isotopeList[j] in df:
-                    header = isotopeList[i] + '/' + isotopeList[j]
-                else:
-                    try:
-                        header = isotopeList[j] + '/' + isotopeList[i]
-                    except:
-                        raise Exception('Sorry, cannot find ratios for your input isotopeList ' + header)
-
-                if header in omitRatios:
-                    if debug == True:
-                        print("Ratios omitted:" + header)
-                    continue
-                else:
-                    #Tim: 20210330: This routine was tricky for me, because of the line "weights = df['absIntensityUnSub']". 
-                    #Not all M+N experiments have an Unsub peak, and it is sometimes a very rare peak. My guess is that the idea
-                    #was to take the largest peak and use that to weight--in this case to implement that, we could pass the 
-                    #"fragmentMostAbundant" parameter to this function and use "weights = df['absIntensityUnSub']. 
-                    
-                    #But I wasn't positive that was right, so I instead added a toggle for the weightByNLHeight routine. We can decide
-                    #later what the best way to deal with this is. 
-                    if weightByNLHeight:
-                        #This logic calculates ratios and statistics for each peak within each file, weighted by NL score for each scan
-                        rtnDict[massStr][header] = {}
-                        values = df[header]
-                        weights = df['absIntensityUnSub']
-                        average = np.average(values, weights=weights)
-                        rtnDict[massStr][header]['Ratio'] = average
-                        rtnDict[massStr][header]['StDev'] = math.sqrt(
-                            np.average((values-average)**2, weights=weights))
-                        rtnDict[massStr][header]['StError'] = rtnDict[massStr][header]['StDev'] / \
-                            np.power(len(df), 0.5)
-                        rtnDict[massStr][header]['RelStError'] = rtnDict[massStr][header]['StError'] / \
-                            rtnDict[massStr][header]['Ratio']
-
-                        a = df['counts' + isotopeList[i]].sum()
-                        b = df['counts' + isotopeList[j]].sum()
-                        shotNoiseByQuad = np.power((1./a + 1./b), 0.5)
-                        rtnDict[massStr][header]['ShotNoiseLimit by Quadrature'] = shotNoiseByQuad
-                        averageTIC = np.mean(df['tic'])
-                        valuesTIC = df['tic']
-                        rtnDict[massStr][header]['TICVar'] = math.sqrt(
-                            np.mean((valuesTIC-averageTIC)**2))/np.mean(valuesTIC)
-
-                        averageTICIT = np.mean(df['TIC*IT'])
-                        valuesTICIT = df['TIC*IT']
-                        rtnDict[massStr][header]['TIC*ITMean'] = averageTICIT
-                        rtnDict[massStr][header]['TIC*ITVar'] = math.sqrt(
-                            np.mean((valuesTICIT-averageTICIT)**2))/np.mean(valuesTICIT)
-
-                        x = df['retTime']
-                        unsub_y = df['counts' + isotopeList[i]]
-                        sub_y = df['counts' + isotopeList[j]]
-
-                        #Integrate the curves based on the time frame chosen and return that R value
-                        unsub_trap_integral, unsub_sum_integral = integrateTimeSeries(x, unsub_y, windowLength= WINDOW_LENGTH, nanReplacer= NAN_REPLACER, slopeThreshhold=SLOPE_THRESHHOLD)
-                        sub_trap_integral, sub_sum_integral = integrateTimeSeries(x, sub_y, windowLength= WINDOW_LENGTH, nanReplacer= NAN_REPLACER, slopeThreshhold=SLOPE_THRESHHOLD)
-
-                        #If trap rule boolean is on, use the trapezoid rule to integrate. OTherwise, sum the counts across the peak and use to calculate a ratio
-                        if TRAP_RULE_BOOL == True:
-                            sub_integral =sub_trap_integral 
-                            unsub_integral = unsub_trap_integral
-                        else:
-                            sub_integral = sub_sum_integral 
-                            unsub_integral = unsub_sum_integral
-
-=======
         rtnDict[massStr] = {}
         
         for i in range(len(isotopeList)):
@@ -504,21 +416,14 @@ def calc_Raw_File_Output(dfList, isotopeList = ['13C','15N','UnSub'],omitRatios 
                     if isotopeList[i] + '/' + isotopeList[j] in dfList[fragmentIndex]:
                         header = isotopeList[i] + '/' + isotopeList[j]
                     else:
->>>>>>> parent of 1219395... main data analysis; visualization; tests
                         try:
                             header = isotopeList[j] + '/' + isotopeList[i]
                         except:
                             raise Exception('Sorry, cannot find ratios for your input isotopeList')
 
-<<<<<<< HEAD
-                        rtnDict[massStr][header]['Ratio_Integrated'] = R_integrated
-                        
-                    #If weightByNLHeight == False, i.e., scans where you are not incoporating elution and peak integration (i.e., most ESI experiments)
-=======
                     if header in omitRatios:
                         print("Ratios omitted:" + header)
                         continue
->>>>>>> parent of 1219395... main data analysis; visualization; tests
                     else:
                             #This logic calculates ratios and statistics for each peak within each file, weighted by NL score for each scan
                             rtnDict[massStr][header] = {}

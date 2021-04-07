@@ -9,7 +9,7 @@ Last Modified: Monday March 15, 2021
 import DataAnalyzerWithPeakInteg
 
 #(1) Data Folder: Specify what folder contains the files to be analyzed
-inputStandardFolder = "/Users/sarahzeichner/Documents/Caltech/Research/Direct Injection/DirectInjectionData/022021_pxylene/m+1"
+inputStandardFolder = "/Users/sarahzeichner/Documents/Caltech/Research/Direct Injection/DirectInjectionData/022021_pxylene/m+1/test"
 
 
 #####################################################################
@@ -41,7 +41,6 @@ peakTimeFrames = [(8.54, 8.86)] #p-xylene
 #omitRatios = ['15N/13C', '13C/15N'] #for nitrogen data
 #omitRatios = ['13C/D',  'D/13C']
 omitRatios = []
-
 
 #####################################################################
 #(3) Set toggles for data analysis
