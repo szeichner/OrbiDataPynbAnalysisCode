@@ -104,13 +104,12 @@ def import_Peaks_From_FTStatFile(inputFileName):
                                         'peakBase': peakBaseline}))
     return(peaks)
 
-def convert_To_Pandas_DataFrame(peaks, gcElutionTimes, baselineSubstractionOn=False):
+def convert_To_Pandas_DataFrame(peaks):
     '''
     Import peaks from FT statistic output file into a workable form, step 2
     
     Inputs:
         peaks: The peaks output from _importPeaksFromFTStatistic; a list of dictionaries. 
-        Tim 20210330: gcElutionTimes is needed as input but not used? 
         
     Outputs: 
         A list, where each element is a pandas dataframe for an individual peak extracted by FTStatistic (i.e. a single line in the FTStat input .txt file). 
@@ -167,10 +166,8 @@ def calc_Append_Ratios(singleDf, allBelowOne = True, isotopeList = ['UnSub', '15
             allBelowOne: if True, outputs ratios as 'Sub/unSub' or 'unSub/Sub', whichever is below 1. If false, outputs
             all as 'sub/unSub'. 
             isotopeList: A list of isotopes corresponding to the peaks extracted by FTStat for this fragment, in the order they were extracted. 
-            debug: Tim 20210330: Added to allow user to suppress print commands
-
-                            
-            
+            debug: Toggle to allow user to print outputs for debugging
+                                
     Outputs:
             The dataframe with ratios added. It computes all ratios, because why not. 
     '''
@@ -227,7 +224,7 @@ def combine_Substituted_Peaks(peakDF, cullOn = [], cullZeroScansOn = False, base
                     i.e. if cullOn is 'TIC*IT' and cullAmount is 3, culls scans where TIC*IT is more than 3 standard deviations from its mean. 
         NL_over_TIC: specific NL/TIC that designates what a "peak" should look like. default 0.1, currently not implemented
         fragmentIsotopeList: A list of lists, where each interior list corresponds to a peak and gives the isotopes corresponding to the peaks extracted by FTStat, in the order they were extracted. This is used to determine all ratios of interest, i.e. 13C/UnSub, and label them in the proper order. 
-        debug: Tim 20210330: Added to allow user to suppress print commands in calc_Append_Ratios
+        debug: Added to allow user to print output within called function for debugging (calc_Append_Ratios)
 
     Outputs: 
         A list of combined dataframes; in the 119/109 example above, it will output a list of two dataframes, [119, 109]
@@ -366,30 +363,6 @@ def cull_On_GC_Peaks(df, gcElutionTimeFrame = (0,0), NL_over_TIC=0.1):
         df = df[df['retTime'].between(gcElutionTimeFrame[0], gcElutionTimeFrame[1], inclusive=True)]
     return df
 
-def calc_slope(x):
-    '''
-    Fits a 1-d polynomial (i.e. line) to the data
-
-    Inputs: 
-        x = range to calculate slope over
-    Outputs: 
-       slope for moving range of points
-    '''
-    slope = np.polyfit(range(len(x)), x, 1)[0]
-    return slope
-
-def gaussian(x, a, b, c):
-    '''
-    Fits the data with a gaussian curve
-
-    Inputs: 
-        x = range to fit with gaussian
-        a, b, c = coefficients of gaussian fit that are calculated
-    Outputs: 
-       gaussian fit
-    '''    
-    return a*np.exp(-np.power(x - b, 2)/(2*np.power(c, 2))) #a * x + b * x**2 + c  
-
 def integrateTimeSeries(x, y, windowLength = 5, nanReplacer = 0.000001, slopeThreshhold =  0.08):
     '''
     Integrates a gaussian peak to return an area
@@ -405,7 +378,7 @@ def integrateTimeSeries(x, y, windowLength = 5, nanReplacer = 0.000001, slopeThr
     '''    
     data = {'x':x, 'y':y}
 
-    #Integrate the data
+    #Integrate the data under a curve using two methods: (1) the trapezoid rule, and (2) sum of counts
     y_trap_int = scipy.integrate.trapz(y, x)
     y_sum_int = sum(y)
 
@@ -426,7 +399,7 @@ def calc_Raw_File_Output(df, isotopeList = ['13C','15N','UnSub'],omitRatios = []
         omitRatios: A list of ratios to ignore. I.e. by default, the script will report 13C/15N ratios, which one may not care about. 
                     In this case, the list should be ['13C/15N','15N/13C'], including both versions, to avoid errors. 
         weightByNLHeight: Used to say whether to weight by NL height or not. Tim: 20210330: Added this as the weightByNLHeight does not yet work with M+N routines. 
-        debug: Set false to suppress print output
+        debug: Turn on to print output to console for debugging
          
     Outputs: 
         A dictionary giving mean, stdev, StandardError, relative standard error, and shot noise limit for all peaks.  
@@ -509,7 +482,6 @@ def calc_Raw_File_Output(df, isotopeList = ['13C','15N','UnSub'],omitRatios = []
                             sub_integral = sub_sum_integral 
                             unsub_integral = unsub_sum_integral
 
-
                         try:
                             R_integrated = float(sub_integral) / float(unsub_integral)
                         except:
@@ -518,7 +490,7 @@ def calc_Raw_File_Output(df, isotopeList = ['13C','15N','UnSub'],omitRatios = []
 
                         rtnDict[massStr][header]['Ratio_Integrated'] = R_integrated
                         
-                    #If weightByNLHeight == False
+                    #If weightByNLHeight == False, i.e., scans where you are not incoporating elution and peak integration (i.e., most ESI experiments)
                     else:
                         #perform calculations and add them to the dictionary     
                         rtnDict[massStr][header] = {}
@@ -628,7 +600,7 @@ def calc_Folder_Output(folderPath, cullOn=None, cullAmount=2,\
         thisFileName = str(folderPath + '/' + fileNames[i])
         print(thisFileName) #for debugging
         thesePeaks = import_Peaks_From_FTStatFile(thisFileName)
-        thisPandas = convert_To_Pandas_DataFrame(thesePeaks, gcElutionTimes)
+        thisPandas = convert_To_Pandas_DataFrame(thesePeaks)
         thisMergedDF = combine_Substituted_Peaks(peakDF=thisPandas,cullOn=cullOn, cullZeroScansOn = cullZeroScansOn, baselineCorrectionOn = baselineSubstractionOn, \
                 gc_elution_on=gcElutionOn, gc_elution_times=gcElutionTimes, cullAmount=cullAmount, fragmentIsotopeList = fragmentIsotopeList, NL_over_TIC=NL_over_TIC, debug = debug)
         thisOutputList = calc_Output_List(thisMergedDF, fragmentIsotopeList, fragmentMostAbundant, weightByNLHeight = weightByNLHeight, debug = debug)
