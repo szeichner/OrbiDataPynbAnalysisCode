@@ -1,7 +1,7 @@
 ##!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Last Modified: Monday March 30, 2021
+Last Modified: Monday March 15, 2021
 
 @author: sarahzeichner
 """
@@ -17,16 +17,7 @@ inputStandardFolder = "/Users/sarahzeichner/Documents/Caltech/Research/Direct In
 #(2) Experimental parameters
 #(2a) Specify the order of isotopes as extracted from FT statistic
 #isotopeList = ['UnSub','13C']
-fragmentIsotopeDict = {'92':['13C','UnSub'],'107':['13C','UnSub']}
-fragmentMostAbundant = ['UnSub','UnSub']
-
-#Extract from dictionary. 
-massStr = []
-fragmentIsotopeList = []
-for i, v in fragmentIsotopeDict.items():
-    massStr.append(i)
-    fragmentIsotopeList.append(v)
-
+isotopeList = ['UnSub', 'D']
 #isotopeList = ['UnSub', '2x13C']
 
 #(2b) Specify the time frame of each eluted peak
@@ -42,9 +33,14 @@ for i, v in fragmentIsotopeDict.items():
 #peakTimeFrames = [(34.36, 35.12), (34.36, 35.12), (34.36, 35.12)] #pyrene large windowxylene
 #peakTimeFrames = [(32.65, 33.35), (32.65, 33.35), (32.65, 33.35)] #fluoranthene large window
 #peakTimeFrames = [(34.15, 34.80), (34.15, 34.80), (34.15, 34.80)] #pyrene large window
-peakTimeFrames = [(8.54, 8.86), (8.54, 8.86)] #p-xylene
-#peakTimeFrames = [(8.54, 8.86)] #p-xylene
+#peakTimeFrames = [(8.54, 8.86), (8.54, 8.86)] #p-xylene
+peakTimeFrames = [(8.54, 8.86)] #p-xylene
 #peakTimeFrames = [(4.56, 6.7)] #chimiak dallas alanine, 184 and 140 peaks
+
+#(2c)Specify any ratios to omit
+#omitRatios = ['15N/13C', '13C/15N'] #for nitrogen data
+#omitRatios = ['13C/D',  'D/13C']
+omitRatios = []
 
 
 #####################################################################
@@ -56,8 +52,6 @@ trapRuleOn = False #True/False, when False, the code integrates by adding counts
 baselineSubstractionOn = True #True/False, when False, no baseline correction is applied to NL scores
 gc_elution_on = True #True/False, when False, all scans are taken to calculate ratios
 NLoverTIC = 0.10 #Threshhold to cull for NL values above TIC for stable isotope ratio measurements. Currently not functional
-weightbyNLHeight = True #weightByNLHeight does not work yet for M+N Measurements. When false, the data are not weighted. 
-debug = True #if False, suppresses print statements showing GC cutoffs and omitted ratios (useful for experiments with many peaks)
 
 #####################################################################
  
@@ -65,9 +59,7 @@ debug = True #if False, suppresses print statements showing GC cutoffs and omitt
 Output, StatsOutput = DataAnalyzerWithPeakInteg.calc_Folder_Output(inputStandardFolder, cullOn=dataCullThreshhold, cullAmount=2,\
                                                                     cullZeroScansOn=cullZeroScansOn, trapRuleOn = trapRuleOn, \
                                                                     baselineSubstractionOn=True, gcElutionOn=gc_elution_on, \
-                                                                    gcElutionTimes = peakTimeFrames, \
-                                                                    fragmentIsotopeList = fragmentIsotopeList, \
-                                                                    fragmentMostAbundant = fragmentMostAbundant, \
-                                                                    NL_over_TIC=NLoverTIC, fileCsvOutputPath=None, debug = debug)
+                                                                    gcElutionTimes = peakTimeFrames, isotopeList = isotopeList, \
+                                                                    NL_over_TIC=NLoverTIC, omitRatios = omitRatios, fileCsvOutputPath=None)
 
 
