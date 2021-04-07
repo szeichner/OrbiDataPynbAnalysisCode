@@ -581,8 +581,8 @@ def calc_Folder_Output(folderPath, cullOn=None, cullAmount=2,\
 
     statsDF = pd.DataFrame([avgDF, integratedAvgDF, countDF, stdDF, stdErrorDF, \
         relStdErrorDF, trapStdDF, trapStdErrorDF, trapRelStdErrorDF], \
-            index=["ScanByScan Avg R Val", "TrapRule Avg R val", "N", "ScanStdDev", "ScanStdError", \
-                "ScanRelStdError", "TrapStdDev", "TrapStdError", "TrapRelStdError"]) 
+            index=["ScanByScan Avg R Val", "Integrated Avg R val", "N", "ScanStdDev", "ScanStdError", \
+                "ScanRelStdError", "IntStdDev", "IntStdError", "IntRelStdError"]) 
     
     #output results to csv
     statsDF.to_csv(str(folderPath + '/' + "stats_output.csv"), index = True, header=True)
