@@ -201,7 +201,7 @@ def calc_Append_Ratios(singleDf, allBelowOne = True, isotopeList = ['UnSub', '15
 
 def combine_Substituted_Peaks(peakDF, cullOn = [], cullZeroScansOn = False, baselineCorrectionOn=False, \
                             gc_elution_on = False, gc_elution_times = [], cullAmount = 2, isotopeList = ['13C','15N','UnSub'], \
-                            NL_over_TIC = 0.10):
+                            minNL_over_maxNL = 0):
     '''
     Merge all extracted peaks from a given fragment into a single dataframe. For example, if I extracted six peaks, the 13C, 15N, and unsubstituted of fragments at 119 and 109, 
     this would input a list of six dataframes (one per peak) and combine them into two dataframes (one per fragment), each including data from the 13C, 15N, 
@@ -297,7 +297,11 @@ def combine_Substituted_Peaks(peakDF, cullOn = [], cullZeroScansOn = False, base
 
             #Cull based on time frame for GC peaks
             if gc_elution_on == True and gc_elution_times != 0:
-                df1= cull_On_GC_Peaks(df1, thisGCElutionTimeRange, NL_over_TIC)
+                df1= cull_On_GC_Peaks(df1, thisGCElutionTimeRange)
+
+            #Cull reservoir measurments based on percent of maxNL of unsub peak
+            if minNL_over_maxNL != 0:
+                df1 = cull_On_Reservoir_Measurement(df1,minNL_over_maxNL)
 
             #Calculates ratio values and adds them to the dataframe. Weighted averages will be calculated in the next step
             df1 = calc_Append_Ratios(df1, isotopeList = isotopeList)
@@ -337,14 +341,13 @@ def remove_background_NL(peakDF, gcElutionTime):
     '''
 
     peakStartIndex = peakDF[peakDF['retTime'].between(gcElutionTime[0], gcElutionTime[1], inclusive=True)].index
-    #peakStartIndexNumber = peakStartIndex['retTime'].index(True)
     baselineRows = peakDF[(peakStartIndex[0] - 10) : (peakStartIndex[0] - 5)]
     averageBaselineNL = baselineRows['absIntensity'].mean()
     peakDF['absIntensity'] = peakDF['absIntensity'] - averageBaselineNL
     
     return peakDF
 
-def cull_On_GC_Peaks(df, gcElutionTimeFrame = (0,0), NL_over_TIC=0.1):
+def cull_On_GC_Peaks(df, gcElutionTimeFrame = (0,0)):
     '''
     Inputs: 
         df: input dataframe to cull
@@ -361,6 +364,32 @@ def cull_On_GC_Peaks(df, gcElutionTimeFrame = (0,0), NL_over_TIC=0.1):
         #Could also cull based on % threshhold of total peak height
         df = df[df['retTime'].between(gcElutionTimeFrame[0], gcElutionTimeFrame[1], inclusive=True)]
     return df
+
+def cull_On_Reservoir_Measurement(df,minNL_over_maxNL=0.1):
+    '''
+    Implemented by Guannan Dong
+    Inputs: 
+        df: input dataframe to cull
+        minNL_over_maxNL: reservoir measurements have a systematic varying NL. 
+            (a rapid increase from the background level to max NL then a gradual decrease)
+            minNL/maxNL designate a lower relative threshold for NL. Default 0.1.                
+    Outputs: 
+       culled df based on the acceptable minimum NL relative to a maximum NL.
+    '''
+    if minNL_over_maxNL != 0:
+        maxNL = df['absIntensityUnSub'].max()
+        maxNLIndex = df['absIntensityUnSub'].idxmax()               
+        #use a boolean series to find the cutoff index for the acceptable min NL post NL max
+        #this is to achieve a 'vertical cut' instead of a 'horizontal cut'
+        s_postNLmax = df.loc[maxNLIndex:df.index[-1],'absIntensityUnSub']<minNL_over_maxNL*maxNL
+        #cull any scan with NL < threshold, or exceeds the cutoff index
+        try:
+            df = df.drop(df[(df['absIntensityUnSub'] < minNL_over_maxNL*maxNL) | (df.index > s_postNLmax[s_postNLmax].index[0])].index)
+        except:
+            df = df[df['absIntensityUnSub'] > minNL_over_maxNL*maxNL]
+            print("NL values post maximum are not culled")
+    return df
+
 
 def integrateTimeSeries(x, y, windowLength = 5, nanReplacer = 0.000001, slopeThreshhold =  0.08):
     '''
@@ -486,7 +515,7 @@ def calc_Folder_Output(folderPath, cullOn=None, cullAmount=2,\
                        cullZeroScansOn=False, trapRuleOn = False, \
                        baselineSubstractionOn=False, gcElutionOn=False, \
                        gcElutionTimes = [], isotopeList = ['UnSub', '13C'], \
-                       NL_over_TIC=0.1, omitRatios = [], fileCsvOutputPath=None):
+                       minNL_over_maxNL=0.1, omitRatios = [], fileCsvOutputPath=None):
 
     '''
     For each raw file in a folder, calculate mean, stdev, SErr, RSE, and ShotNoise based on counts. Outputs these in 
@@ -532,7 +561,7 @@ def calc_Folder_Output(folderPath, cullOn=None, cullAmount=2,\
         thesePeaks = import_Peaks_From_FTStatFile(thisFileName)
         thisPandas = convert_To_Pandas_DataFrame(thesePeaks)
         thisMergedDF = combine_Substituted_Peaks(peakDF=thisPandas,cullOn=cullOn, cullZeroScansOn = cullZeroScansOn, baselineCorrectionOn = baselineSubstractionOn, \
-                gc_elution_on=gcElutionOn, gc_elution_times=gcElutionTimes, cullAmount=cullAmount, isotopeList=isotopeList, NL_over_TIC=NL_over_TIC)
+                gc_elution_on=gcElutionOn, gc_elution_times=gcElutionTimes, cullAmount=cullAmount, isotopeList=isotopeList, minNL_over_maxNL=minNL_over_maxNL)
         thisOutput = calc_Raw_File_Output(thisMergedDF, isotopeList, omitRatios)
         keys = list(thisOutput.keys())
         peakNumber = len(keys)

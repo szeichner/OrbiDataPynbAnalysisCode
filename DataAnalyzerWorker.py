@@ -50,7 +50,7 @@ cullZeroScansOn = False #True/False
 trapRuleOn = False #True/False, when False, the code integrates by adding counts over a peak and then taking the ratio with the unsubstitutde
 baselineSubstractionOn = True #True/False, when False, no baseline correction is applied to NL scores
 gc_elution_on = True #True/False, when False, all scans are taken to calculate ratios
-cullingThreshholdPercentMaxUnsubNLPeak = 0.10 #Threshhold to cull for NL values above TIC for stable isotope ratio measurements. Currently not functional
+cullingThreshholdPercentMaxUnsubNLPeak = 0.10 #Threshhold to cull only above a threshhold for the values where NL/maxUnSub(NL)<threshhold
 
 #####################################################################
  
@@ -59,7 +59,7 @@ Output, StatsOutput = DataAnalyzerWithPeakInteg.calc_Folder_Output(inputStandard
                                                                     cullZeroScansOn=cullZeroScansOn, trapRuleOn = trapRuleOn, \
                                                                     baselineSubstractionOn=True, gcElutionOn=gc_elution_on, \
                                                                     gcElutionTimes = peakTimeFrames, isotopeList = isotopeList, \
-                                                                    NL_over_TIC=cullingThreshholdPercentMaxUnsubNLPeak, \
+                                                                    minNL_over_maxNL=cullingThreshholdPercentMaxUnsubNLPeak, \
                                                                     omitRatios = omitRatios, fileCsvOutputPath=None)
 
 
