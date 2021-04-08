@@ -9,7 +9,7 @@ Last Modified: Monday March 15, 2021
 import DataAnalyzerWithPeakInteg
 
 #(1) Data Folder: Specify what folder contains the files to be analyzed
-inputStandardFolder = "/Users/sarahzeichner/Documents/Caltech/Research/Direct Injection/DirectInjectionData/022021_pxylene/m+1"
+inputStandardFolder = "/Users/sarahzeichner/Documents/Caltech/Research/Direct Injection/DirectInjectionData/022021_pxylene/80-120/test"
 
 
 #####################################################################
@@ -17,7 +17,7 @@ inputStandardFolder = "/Users/sarahzeichner/Documents/Caltech/Research/Direct In
 #(2) Experimental parameters
 #(2a) Specify the order of isotopes as extracted from FT statistic
 #isotopeList = ['UnSub','13C']
-isotopeList = ['UnSub', 'D']
+isotopeList = ['UnSub', '13C']
 #isotopeList = ['UnSub', '2x13C']
 
 #(2b) Specify the time frame of each eluted peak
@@ -33,15 +33,14 @@ isotopeList = ['UnSub', 'D']
 #peakTimeFrames = [(34.36, 35.12), (34.36, 35.12), (34.36, 35.12)] #pyrene large windowxylene
 #peakTimeFrames = [(32.65, 33.35), (32.65, 33.35), (32.65, 33.35)] #fluoranthene large window
 #peakTimeFrames = [(34.15, 34.80), (34.15, 34.80), (34.15, 34.80)] #pyrene large window
-#peakTimeFrames = [(8.54, 8.86), (8.54, 8.86)] #p-xylene
-peakTimeFrames = [(8.54, 8.86)] #p-xylene
+peakTimeFrames = [(8.54, 8.86), (8.54, 8.86)] #p-xylene
+#peakTimeFrames = [(8.54, 8.86)] #p-xylene
 #peakTimeFrames = [(4.56, 6.7)] #chimiak dallas alanine, 184 and 140 peaks
 
 #(2c)Specify any ratios to omit
 #omitRatios = ['15N/13C', '13C/15N'] #for nitrogen data
 #omitRatios = ['13C/D',  'D/13C']
 omitRatios = []
-
 
 #####################################################################
 #(3) Set toggles for data analysis
@@ -51,7 +50,7 @@ cullZeroScansOn = False #True/False
 trapRuleOn = False #True/False, when False, the code integrates by adding counts over a peak and then taking the ratio with the unsubstitutde
 baselineSubstractionOn = True #True/False, when False, no baseline correction is applied to NL scores
 gc_elution_on = True #True/False, when False, all scans are taken to calculate ratios
-NLoverTIC = 0.10 #Threshhold to cull for NL values above TIC for stable isotope ratio measurements. Currently not functional
+cullingThreshholdPercentMaxUnsubNLPeak = 0.10 #Threshhold to cull only above a threshhold for the values where NL/maxUnSub(NL)<threshhold
 
 #####################################################################
  
@@ -60,6 +59,7 @@ Output, StatsOutput = DataAnalyzerWithPeakInteg.calc_Folder_Output(inputStandard
                                                                     cullZeroScansOn=cullZeroScansOn, trapRuleOn = trapRuleOn, \
                                                                     baselineSubstractionOn=True, gcElutionOn=gc_elution_on, \
                                                                     gcElutionTimes = peakTimeFrames, isotopeList = isotopeList, \
-                                                                    NL_over_TIC=NLoverTIC, omitRatios = omitRatios, fileCsvOutputPath=None)
+                                                                    minNL_over_maxNL=cullingThreshholdPercentMaxUnsubNLPeak, \
+                                                                    omitRatios = omitRatios, fileCsvOutputPath=None)
 
 
