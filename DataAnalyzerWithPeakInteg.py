@@ -339,9 +339,8 @@ def remove_background_NL(peakDF, gcElutionTime):
     Outputs:
         culled df with background NL subtracted
     '''
-
-    peakStartIndex = peakDF[peakDF['retTime'].between(gcElutionTime[0], gcElutionTime[1], inclusive=True)].index
-    baselineRows = peakDF[(peakStartIndex[0] - 10) : (peakStartIndex[0] - 5)]
+    peakStartIndex = peakDF[peakDF['retTime'].between(gcElutionTime[0], gcElutionTime[1], inclusive=True)].index[0]
+    baselineRows = peakDF[int(peakStartIndex - 10) : int(peakStartIndex - 5)]
     averageBaselineNL = baselineRows['absIntensity'].mean()
     peakDF['absIntensity'] = peakDF['absIntensity'] - averageBaselineNL
     
