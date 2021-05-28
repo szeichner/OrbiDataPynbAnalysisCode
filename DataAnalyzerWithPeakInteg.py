@@ -41,66 +41,49 @@ def import_Peaks_From_FTStatFile(inputFileName):
     Import peaks from FT statistic output file into a workable form, step 1
     
     Inputs:
-        inputFileName: The excel file to input from
+        inputFileName: The raw FT Statistic file to input from
         
     Outputs:
         A list, containing dictionaries for each mass with a set of peaks in the excel file. 
         The dictionaries have entries for 'tolerance', 'lastScan', 'refMass', and 'scans'. The 'scans' key directs to another list; 
         this has a dictionary for each indvidual scan, giving a bunch of data about that scan. 
     '''
+    #Get data and delete header
+    data = []
+    for line in open(inputFileName):
+        data.append(line.split('\t'))
 
-    wb = openpyxl.load_workbook(inputFileName)
-    ws = wb.active
+    for l in range(len(data)):
+        if data[l][0] == 'Tolerance:':
+            del data[:l]
+            break
     
-    # list containing packets containing dicts of microscans for each measured peak
     peaks = []
-    onMicroScans = False    
-
-    for i, row in enumerate(ws.iter_rows(min_row=1,max_row=ws.max_row, values_only=True)):
-        r = i+1 # r is row number in spreadsheet
-        if 'Tolerance:' in row:
-            peaks.append({})
-            # Get the tolerance
-            try:
-                tol = float(ws.cell(r,2).value.strip(' ppm'))
-            except:
-                tol = float(ws.cell(r,2).value.strip(' mmu'))
-            # Get the last scan of microscan packets
-            lastScan = int(ws.cell(r,8).value)
-            # Get the ref mass
-            refMass = float(ws.cell(r,10).value)
-            peaks[-1] = {'tolerance': tol, 'lastScan': lastScan,
-                      'refMass': refMass, 'scans': []}
-            continue
-            
-        if 'Measured Mass:' in row:
-            # Saving rows to know what goes in each column (in case of changes later in the sheet)
-            colIndex = row
-            onMicroScans = True
-            continue
-                    
-        if onMicroScans:
-            if 'Aver:' in row:
-                onMicroScans = False
-                continue
-            measuredMass    = ws.cell(r, colIndex.index('Measured Mass:')+1).value
-            retTime         = ws.cell(r, colIndex.index('Ret. Time:')+1).value
-            scanNumber      = ws.cell(r, colIndex.index('Scan Number:')+1).value
-            absIntensity    = ws.cell(r, colIndex.index('Abs. Intensity:')+1).value
-            integrationTime = ws.cell(r, colIndex.index('IT [ms]:')+1).value
-            ftResolution    = ws.cell(r, colIndex.index('FT Resolution:')+1).value
-            peakNoise       = ws.cell(r, colIndex.index('Peak Noise')+1).value
-            totalIonCount   = ws.cell(r, colIndex.index('TIC:')+1).value
-            ticTimesIT      = ws.cell(r, colIndex.index('TIC*IT:')+1).value
-            peakResolution  = ws.cell(r, colIndex.index('Peak Resolution')+1).value
-            peakBaseline    = ws.cell(r, colIndex.index('Peak Baseline')+1).value
-            if measuredMass == '' and retTime == '' and scanNumber == '':
-                continue
-            if scanNumber == lastScan:
-                onMicroScans = False
-            peaks[-1]['scans'].append(({'mass': measuredMass, 'retTime': retTime, 'tic': totalIonCount,
-                                        'scanNumber': scanNumber, 'absIntensity': absIntensity, 'integTime': integrationTime,'TIC*IT': ticTimesIT,'ftRes': ftResolution, 'peakNoise': peakNoise, 'peakRes': peakResolution, 'peakBase': peakBaseline}))
-    return(peaks)
+    n = -1
+    
+    for d in range(len(data)):
+        if data[d][0] == 'Tolerance:':
+            peaks.append({'tolerance': float(data[d][1].split()[0]),
+                          'lastScan': int(data[d][7]),
+                          'refMass': float(data[d][9]),
+                          'scans': []})
+            n += 1
+        try:
+            peaks[n]['scans'].append({'mass': float(data[d][1]),
+                                      'retTime': float(data[d][2]),
+                                      'tic': int(data[d][8]),
+                                      'scanNumber': int(data[d][3]),
+                                      'absIntensity': int(data[d][6]),
+                                      'integTime': float(data[d][9]),
+                                      'TIC*IT': int(data[d][10]),
+                                      'ftRes': int(data[d][13]),
+                                      'peakNoise': float(data[d][25]),
+                                      'peakRes': int(data[d][27]),
+                                      'peakBase': float(data[d][28])})
+        except:
+            pass
+        
+    return peaks
 
 def convert_To_Pandas_DataFrame(peaks):
     '''
