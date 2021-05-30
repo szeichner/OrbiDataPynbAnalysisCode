@@ -78,7 +78,7 @@ def import_Peaks_From_FTStatFile(inputFileName):
                                       'TIC*IT': int(data[d][10]),
                                       'ftRes': int(data[d][13]),
                                       'peakNoise': float(data[d][25]),
-                                      'peakRes': int(data[d][27]),
+                                      'peakRes': float(data[d][27]),
                                       'peakBase': float(data[d][28])})
         except:
             pass
@@ -534,7 +534,7 @@ def calc_Folder_Output(folderPath, cullOn=None, cullAmount=2,\
     header = ["FileNumber", "Fragment", "IsotopeRatio", "IntegratedIsotopeRatio", "Average", \
         "StdDev", "StdError", "RelStdError","TICVar","TIC*ITVar","TIC*ITMean", 'ShotNoise']
     #get all the file names in the folder with the same end 
-    fileNames = [x for x in os.listdir(folderPath) if x.endswith(".xlsx")]
+    fileNames = [x for x in os.listdir(folderPath) if x.endswith(".txt")]
     peakNumber = 0
 
     #Process through each raw file added and calculate statistics for fragments of interest
