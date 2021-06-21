@@ -41,6 +41,7 @@ peakTimeFrames = [(8.54, 8.86), (8.54, 8.86)] #p-xylene
 #omitRatios = ['15N/13C', '13C/15N'] #for nitrogen data
 #omitRatios = ['13C/D',  'D/13C']
 omitRatios = []
+backgroundNLTimes = []
 
 #####################################################################
 #(3) Set toggles for data analysis
