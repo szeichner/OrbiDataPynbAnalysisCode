@@ -9,8 +9,7 @@ Last Modified: Monday March 15, 2021
 import DataAnalyzerWithPeakInteg
 
 #(1) Data Folder: Specify what folder contains the files to be analyzed
-inputStandardFolder = "/Users/sarahzeichner/Documents/Caltech/Research/Direct Injection/DirectInjectionData/022021_pxylene/80-120/test"
-
+inputStandardFolder = "/Users/sarahzeichner/Documents/Caltech/Research/Direct Injection/June2021_DirectInjectionDataReprocess/pxylene_80to120_15k"
 
 #####################################################################
 
@@ -37,7 +36,10 @@ peakTimeFrames = [(8.54, 8.86), (8.54, 8.86)] #p-xylene
 #peakTimeFrames = [(8.54, 8.86)] #p-xylene
 #peakTimeFrames = [(4.56, 6.7)] #chimiak dallas alanine, 184 and 140 peaks
 
-#(2c)Specify any ratios to omit
+#(2c) Specify time to extract out the background, similar to what is done in x-calibur when you highlight a part of the background
+backgroundNLTimes = [(8.30,8.35),(8.30,8.35)]
+
+#(2d)Specify any ratios to omit
 #omitRatios = ['15N/13C', '13C/15N'] #for nitrogen data
 #omitRatios = ['13C/D',  'D/13C']
 omitRatios = []
@@ -54,12 +56,12 @@ cullingThreshholdPercentMaxUnsubNLPeak = 0.10 #Threshhold to cull only above a t
 
 #####################################################################
  
+
 #(4) Perform the data analysis and return the output! (Output is also exported to CSV in the underlying code, to the inputFolder path)
 Output, StatsOutput = DataAnalyzerWithPeakInteg.calc_Folder_Output(inputStandardFolder, cullOn=dataCullThreshhold, cullAmount=2,\
-                                                                    cullZeroScansOn=cullZeroScansOn, trapRuleOn = trapRuleOn, \
-                                                                    baselineSubstractionOn=True, gcElutionOn=gc_elution_on, \
-                                                                    gcElutionTimes = peakTimeFrames, isotopeList = isotopeList, \
+                                                                    cullZeroScansOn=cullZeroScansOn,baselineSubstractionOn=baselineSubstractionOn, \
+                                                                    gcElutionOn=gc_elution_on, gcElutionTimes = peakTimeFrames, \
+                                                                    backgroundNLTimes = backgroundNLTimes, \
+                                                                    isotopeList = isotopeList, \
                                                                     minNL_over_maxNL=cullingThreshholdPercentMaxUnsubNLPeak, \
-                                                                    omitRatios = omitRatios, fileCsvOutputPath=None)
-
-
+                                                                    omitRatios = omitRatios)

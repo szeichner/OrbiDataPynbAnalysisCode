@@ -183,7 +183,7 @@ def calc_Append_Ratios(singleDf, allBelowOne = True, isotopeList = ['UnSub', '15
     return singleDf
 
 def combine_Substituted_Peaks(peakDF, cullOn = [], cullZeroScansOn = False, baselineCorrectionOn=False, \
-                            gc_elution_on = False, gc_elution_times = [], cullAmount = 2, isotopeList = ['13C','15N','UnSub'], \
+                            gc_elution_on = False, gc_elution_times = [], backgroundNLTimes=[], cullAmount = 2, isotopeList = ['13C','15N','UnSub'], \
                             minNL_over_maxNL = 0):
     '''
     Merge all extracted peaks from a given fragment into a single dataframe. For example, if I extracted six peaks, the 13C, 15N, and unsubstituted of fragments at 119 and 109, 
@@ -213,6 +213,7 @@ def combine_Substituted_Peaks(peakDF, cullOn = [], cullZeroScansOn = False, base
     DFList = []
     numberPeaksPerFragment = len(isotopeList)
     thisGCElutionTimeRange = []
+    thisBaselineCorrectionRange = []
 
     for peakIndex in range(len(peakDF)):
         if peakIndex % numberPeaksPerFragment == 0:
@@ -225,7 +226,8 @@ def combine_Substituted_Peaks(peakDF, cullOn = [], cullZeroScansOn = False, base
 
             #remove background
             if baselineCorrectionOn ==True:
-                df1 = remove_background_NL(df1, thisGCElutionTimeRange)
+                thisBaselineCorrectionRange = backgroundNLTimes[int(peakIndex / numberPeaksPerFragment)]
+                df1 = remove_background_NL(df1, thisGCElutionTimeRange, backgroundTimeFrame=thisBaselineCorrectionRange)
 
             # calculate counts and add to the dataframe
             df1 = calculate_Counts_And_ShotNoise(df1)
@@ -244,7 +246,7 @@ def combine_Substituted_Peaks(peakDF, cullOn = [], cullZeroScansOn = False, base
                 df2 = peakDF[peakIndex + additionalDfIndex+1].copy()
                 
                 if baselineCorrectionOn ==True:
-                    df2 = remove_background_NL(df2, thisGCElutionTimeRange)
+                    df2 = remove_background_NL(df2, thisGCElutionTimeRange, backgroundTimeFrame=thisBaselineCorrectionRange)
                 
                 # calculate counts and add to the dataframe
                 df2 = calculate_Counts_And_ShotNoise(df2)
@@ -314,7 +316,7 @@ def cull_Zero_Scans(df):
     df = df[~(df == 0).any(axis=1)]
     return df
 
-def remove_background_NL(peakDF, gcElutionTime):
+def remove_background_NL(peakDF, gcElutionTime, backgroundTimeFrame=(0,0)):
     '''
     Inputs:
         peakDF: data frame for this peak
@@ -323,12 +325,23 @@ def remove_background_NL(peakDF, gcElutionTime):
         culled df with background NL subtracted
     '''
 
-    peakStartIndex = peakDF[peakDF['retTime'].between(gcElutionTime[0], gcElutionTime[1], inclusive=True)].index
-    baselineRows = peakDF[(peakStartIndex[0] - 10) : (peakStartIndex[0] - 5)]
+    if backgroundTimeFrame != (0,0):
+        baselineRows = peakDF[peakDF['retTime'].between(backgroundTimeFrame[0], backgroundTimeFrame[1], inclusive=True)]
+    else:
+        peakStartIndex = peakDF[peakDF['retTime'].between(gcElutionTime[0], gcElutionTime[1], inclusive=True)].index
+        baselineRows = peakDF[(peakStartIndex[0] - 10) : (peakStartIndex[0] - 5)]
+    
+    #take the mean over the baseline time frame
     averageBaselineNL = baselineRows['absIntensity'].mean()
+
+    #account for baseline not being included in the passed in time frame, and set background to zero
+    if math.isnan(averageBaselineNL):
+        averageBaselineNL = 0
+        print("peak does not have baseline counts for the baseline time frame passed in")
     peakDF['absIntensity'] = peakDF['absIntensity'] - averageBaselineNL
     
     return peakDF
+
 
 def cull_On_GC_Peaks(df, gcElutionTimeFrame = (0,0)):
     '''
@@ -495,10 +508,9 @@ def calc_Raw_File_Output(dfList, isotopeList = ['13C','15N','UnSub'],omitRatios 
     return rtnDict
 
 def calc_Folder_Output(folderPath, cullOn=None, cullAmount=2,\
-                       cullZeroScansOn=False, trapRuleOn = False, \
-                       baselineSubstractionOn=False, gcElutionOn=False, \
-                       gcElutionTimes = [], isotopeList = ['UnSub', '13C'], \
-                       minNL_over_maxNL=0.1, omitRatios = [], fileCsvOutputPath=None):
+                       cullZeroScansOn=False, baselineSubstractionOn=False, gcElutionOn=False, \
+                       gcElutionTimes = [], backgroundNLTimes = [], isotopeList = ['UnSub', '13C'], \
+                       minNL_over_maxNL=0.1, omitRatios = []):
 
     '''
     For each raw file in a folder, calculate mean, stdev, SErr, RSE, and ShotNoise based on counts. Outputs these in 
@@ -528,8 +540,6 @@ def calc_Folder_Output(folderPath, cullOn=None, cullAmount=2,\
         (Both the dataframes are also exported as csvs to the original input folder)
     '''
 
-    ratio = "Ratio"
-    stdev = "StdDev"
     rtnAllFilesDF = []
     header = ["FileNumber", "Fragment", "IsotopeRatio", "IntegratedIsotopeRatio", "Average", \
         "StdDev", "StdError", "RelStdError","TICVar","TIC*ITVar","TIC*ITMean", 'ShotNoise']
@@ -544,7 +554,7 @@ def calc_Folder_Output(folderPath, cullOn=None, cullAmount=2,\
         thesePeaks = import_Peaks_From_FTStatFile(thisFileName)
         thisPandas = convert_To_Pandas_DataFrame(thesePeaks)
         thisMergedDF = combine_Substituted_Peaks(peakDF=thisPandas,cullOn=cullOn, cullZeroScansOn = cullZeroScansOn, baselineCorrectionOn = baselineSubstractionOn, \
-                gc_elution_on=gcElutionOn, gc_elution_times=gcElutionTimes, cullAmount=cullAmount, isotopeList=isotopeList, minNL_over_maxNL=minNL_over_maxNL)
+                gc_elution_on=gcElutionOn, gc_elution_times=gcElutionTimes, backgroundNLTimes=backgroundNLTimes, cullAmount=cullAmount, isotopeList=isotopeList, minNL_over_maxNL=minNL_over_maxNL)
         thisOutput = calc_Raw_File_Output(thisMergedDF, isotopeList, omitRatios)
         keys = list(thisOutput.keys())
         peakNumber = len(keys)
