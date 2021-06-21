@@ -213,6 +213,7 @@ def combine_Substituted_Peaks(peakDF, cullOn = [], cullZeroScansOn = False, base
     DFList = []
     numberPeaksPerFragment = len(isotopeList)
     thisGCElutionTimeRange = []
+    thisBaselineCorrectionRange = []
 
     for peakIndex in range(len(peakDF)):
         if peakIndex % numberPeaksPerFragment == 0:
@@ -225,7 +226,8 @@ def combine_Substituted_Peaks(peakDF, cullOn = [], cullZeroScansOn = False, base
 
             #remove background
             if baselineCorrectionOn ==True:
-                df1 = remove_background_NL(df1, thisGCElutionTimeRange, backgroundTimeFrame=backgroundNLTimes)
+                thisBaselineCorrectionRange = backgroundNLTimes[int(peakIndex / numberPeaksPerFragment)]
+                df1 = remove_background_NL(df1, thisGCElutionTimeRange, backgroundTimeFrame=thisBaselineCorrectionRange)
 
             # calculate counts and add to the dataframe
             df1 = calculate_Counts_And_ShotNoise(df1)
@@ -244,7 +246,7 @@ def combine_Substituted_Peaks(peakDF, cullOn = [], cullZeroScansOn = False, base
                 df2 = peakDF[peakIndex + additionalDfIndex+1].copy()
                 
                 if baselineCorrectionOn ==True:
-                    df2 = remove_background_NL(df2, thisGCElutionTimeRange, backgroundTimeFrame=backgroundNLTimes)
+                    df2 = remove_background_NL(df2, thisGCElutionTimeRange, backgroundTimeFrame=thisBaselineCorrectionRange)
                 
                 # calculate counts and add to the dataframe
                 df2 = calculate_Counts_And_ShotNoise(df2)
@@ -314,7 +316,7 @@ def cull_Zero_Scans(df):
     df = df[~(df == 0).any(axis=1)]
     return df
 
-def remove_background_NL(peakDF, gcElutionTime, backgroundTimeFrame=[]):
+def remove_background_NL(peakDF, gcElutionTime, backgroundTimeFrame=(0,0)):
     '''
     Inputs:
         peakDF: data frame for this peak
@@ -323,16 +325,19 @@ def remove_background_NL(peakDF, gcElutionTime, backgroundTimeFrame=[]):
         culled df with background NL subtracted
     '''
 
-
-    #TODO: change function callerse to pass in background time frames
-    #test the background frames passed in
-    if backgroundTimeFrame != []:
-        averageBaselineNL = peakDF[peakDF['retTime'].between(backgroundTimeFrame[0], backgroundTimeFrame[1], inclusive=True)].mean()
+    if backgroundTimeFrame != (0,0):
+        baselineRows = peakDF[peakDF['retTime'].between(backgroundTimeFrame[0], backgroundTimeFrame[1], inclusive=True)]
     else:
         peakStartIndex = peakDF[peakDF['retTime'].between(gcElutionTime[0], gcElutionTime[1], inclusive=True)].index
         baselineRows = peakDF[(peakStartIndex[0] - 10) : (peakStartIndex[0] - 5)]
-        averageBaselineNL = baselineRows['absIntensity'].mean()
     
+    #take the mean over the baseline time frame
+    averageBaselineNL = baselineRows['absIntensity'].mean()
+
+    #account for baseline not being included in the passed in time frame, and set background to zero
+    if math.isnan(averageBaselineNL):
+        averageBaselineNL = 0
+        print("peak does not have baseline counts for the baseline time frame passed in")
     peakDF['absIntensity'] = peakDF['absIntensity'] - averageBaselineNL
     
     return peakDF
@@ -503,10 +508,9 @@ def calc_Raw_File_Output(dfList, isotopeList = ['13C','15N','UnSub'],omitRatios 
     return rtnDict
 
 def calc_Folder_Output(folderPath, cullOn=None, cullAmount=2,\
-                       cullZeroScansOn=False, trapRuleOn = False, \
-                       baselineSubstractionOn=False, gcElutionOn=False, \
+                       cullZeroScansOn=False, baselineSubstractionOn=False, gcElutionOn=False, \
                        gcElutionTimes = [], backgroundNLTimes = [], isotopeList = ['UnSub', '13C'], \
-                       minNL_over_maxNL=0.1, omitRatios = [], fileCsvOutputPath=None):
+                       minNL_over_maxNL=0.1, omitRatios = []):
 
     '''
     For each raw file in a folder, calculate mean, stdev, SErr, RSE, and ShotNoise based on counts. Outputs these in 
@@ -536,8 +540,6 @@ def calc_Folder_Output(folderPath, cullOn=None, cullAmount=2,\
         (Both the dataframes are also exported as csvs to the original input folder)
     '''
 
-    ratio = "Ratio"
-    stdev = "StdDev"
     rtnAllFilesDF = []
     header = ["FileNumber", "Fragment", "IsotopeRatio", "IntegratedIsotopeRatio", "Average", \
         "StdDev", "StdError", "RelStdError","TICVar","TIC*ITVar","TIC*ITMean", 'ShotNoise']
