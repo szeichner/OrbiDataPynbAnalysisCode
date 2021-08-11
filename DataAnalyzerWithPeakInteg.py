@@ -118,9 +118,10 @@ def convert_To_Pandas_DataFrame(peaks):
 
     return(rtnAllPeakDF)
 
-def calculate_Counts_And_ShotNoise(peakDF,resolution=120000,CN=4.4,z=1,Microscans=1):
+def calculate_Counts(peakDF,weightByNLOn = False,resolution=120000,CN=4.4,z=1,Microscans=1):
     '''
-    Calculate counts of each scan peak
+    Calculate counts of each scan peak. If weightByNLOn = True, calculate counts weighted by the % of absolute intensity
+    that scan is
     
     Inputs: 
         peakDf: An individual dataframe consisting of a single peak extracted by FTStatistic.
@@ -132,11 +133,13 @@ def calculate_Counts_And_ShotNoise(peakDF,resolution=120000,CN=4.4,z=1,Microscan
     Outputs: 
         The inputDF, with a column for 'counts' added. 
     '''
-    #NOTE: Uncomment this to test just NL score for ratios
-    #peakDF['counts'] = peakDF['absIntensity']  
 
-    peakDF['counts'] = (peakDF['absIntensity'] /
-                  peakDF['peakNoise']) * (CN/z) *(resolution/peakDF['ftRes'])**(0.5) * Microscans**(0.5)
+    if weightByNLOn ==True:
+        maxNL = peakDF['absIntensity'].max()   
+        counts = (peakDF['absIntensity'] / peakDF['peakNoise']) * (CN/z) *(resolution/peakDF['ftRes'])**(0.5) * Microscans**(0.5)
+        peakDF['counts'] = counts * (peakDF['absIntensity'] / maxNL)
+    else:
+        peakDF['counts'] = (peakDF['absIntensity'] / peakDF['peakNoise']) * (CN/z) *(resolution/peakDF['ftRes'])**(0.5) * Microscans**(0.5)
     return peakDF
 
 def calc_Append_Ratios(singleDf, allBelowOne = True, isotopeList = ['UnSub', '15N',  '13C']):
@@ -182,7 +185,7 @@ def calc_Append_Ratios(singleDf, allBelowOne = True, isotopeList = ['UnSub', '15
                     print(str(isotopeList[j]) + "timing: " + str(singleDf[['counts' + isotopeList[j]]].idxmax()))
     return singleDf
 
-def combine_Substituted_Peaks(peakDF, cullOn = [], cullZeroScansOn = False, baselineCorrectionOn=False, \
+def combine_Substituted_Peaks(peakDF, cullOn = [], cullZeroScansOn = False, baselineCorrectionOn=False, weightByNLOn=False,\
                             gc_elution_on = False, gc_elution_times = [], backgroundNLTimes=[], cullAmount = 2, isotopeList = ['13C','15N','UnSub'], \
                             minNL_over_maxNL = 0):
     '''
@@ -230,7 +233,7 @@ def combine_Substituted_Peaks(peakDF, cullOn = [], cullZeroScansOn = False, base
                 df1 = remove_background_NL(df1, thisGCElutionTimeRange, backgroundTimeFrame=thisBaselineCorrectionRange)
 
             # calculate counts and add to the dataframe
-            df1 = calculate_Counts_And_ShotNoise(df1)
+            df1 = calculate_Counts(df1, weightByNLOn=weightByNLOn)
            
             #Rename columns to keep track of them
             sub = isotopeList[0]
@@ -249,7 +252,7 @@ def combine_Substituted_Peaks(peakDF, cullOn = [], cullZeroScansOn = False, base
                     df2 = remove_background_NL(df2, thisGCElutionTimeRange, backgroundTimeFrame=thisBaselineCorrectionRange)
                 
                 # calculate counts and add to the dataframe
-                df2 = calculate_Counts_And_ShotNoise(df2)
+                df2 = calculate_Counts(df2, weightByNLOn=weightByNLOn)
            
                 sub = isotopeList[additionalDfIndex+1]
                 df2.rename(columns={'mass':'mass'+sub,'counts':'counts'+sub,'absIntensity':'absIntensity'+sub,
@@ -288,8 +291,9 @@ def combine_Substituted_Peaks(peakDF, cullOn = [], cullZeroScansOn = False, base
             if minNL_over_maxNL != 0:
                 df1 = cull_On_Reservoir_Measurement(df1,minNL_over_maxNL)
 
-            #Calculates ratio values and adds them to the dataframe. Weighted averages will be calculated in the next step
+            #Calculates ratio values and adds them to the dataframe. 
             df1 = calc_Append_Ratios(df1, isotopeList = isotopeList)
+
             #Given a key in the dataframe, culls scans outside specified multiple of standard deviation from the mean
             if cullOn != None:
                 if cullOn not in list(df1):
@@ -467,6 +471,7 @@ def calc_Raw_File_Output(dfList, isotopeList = ['13C','15N','UnSub'],omitRatios 
                                                       isotopeList[i]].sum()
                             b = dfList[fragmentIndex]['counts' +
                                                       isotopeList[j]].sum()
+                            rtnDict[massStr][header]['SumTotalCounts'] = a+b
                             shotNoiseByQuad = np.power((1./a + 1./b), 0.5)
                             rtnDict[massStr][header]['ShotNoiseLimit by Quadrature'] = shotNoiseByQuad
                             averageTIC = np.mean(dfList[fragmentIndex]['tic'])
@@ -508,7 +513,7 @@ def calc_Raw_File_Output(dfList, isotopeList = ['13C','15N','UnSub'],omitRatios 
     return rtnDict
 
 def calc_Folder_Output(folderPath, cullOn=None, cullAmount=2,\
-                       cullZeroScansOn=False, baselineSubstractionOn=False, gcElutionOn=False, \
+                       cullZeroScansOn=False, baselineSubstractionOn=False, gcElutionOn=False, weightByNLOn=False,\
                        gcElutionTimes = [], backgroundNLTimes = [], isotopeList = ['UnSub', '13C'], \
                        minNL_over_maxNL=0.1, omitRatios = []):
 
@@ -542,7 +547,7 @@ def calc_Folder_Output(folderPath, cullOn=None, cullAmount=2,\
 
     rtnAllFilesDF = []
     header = ["FileNumber", "Fragment", "IsotopeRatio", "IntegratedIsotopeRatio", "Average", \
-        "StdDev", "StdError", "RelStdError","TICVar","TIC*ITVar","TIC*ITMean", 'ShotNoise']
+        "StdDev", "StdError", "RelStdError","TICVar","TIC*ITVar","TIC*ITMean", 'SumTotalCounts','ShotNoise']
     #get all the file names in the folder with the same end 
     fileNames = [x for x in os.listdir(folderPath) if x.endswith(".txt")]
     peakNumber = 0
@@ -553,7 +558,7 @@ def calc_Folder_Output(folderPath, cullOn=None, cullAmount=2,\
         print(thisFileName) #for debugging
         thesePeaks = import_Peaks_From_FTStatFile(thisFileName)
         thisPandas = convert_To_Pandas_DataFrame(thesePeaks)
-        thisMergedDF = combine_Substituted_Peaks(peakDF=thisPandas,cullOn=cullOn, cullZeroScansOn = cullZeroScansOn, baselineCorrectionOn = baselineSubstractionOn, \
+        thisMergedDF = combine_Substituted_Peaks(peakDF=thisPandas,cullOn=cullOn, cullZeroScansOn = cullZeroScansOn, baselineCorrectionOn = baselineSubstractionOn, weightByNLOn=weightByNLOn, \
                 gc_elution_on=gcElutionOn, gc_elution_times=gcElutionTimes, backgroundNLTimes=backgroundNLTimes, cullAmount=cullAmount, isotopeList=isotopeList, minNL_over_maxNL=minNL_over_maxNL)
         thisOutput = calc_Raw_File_Output(thisMergedDF, isotopeList, omitRatios)
         keys = list(thisOutput.keys())
@@ -575,9 +580,10 @@ def calc_Folder_Output(folderPath, cullOn=None, cullAmount=2,\
                 thisTICVar = thisOutput[thisPeak][thisRatio]["TICVar"] 
                 thisTICITVar = thisOutput[thisPeak][thisRatio]["TIC*ITVar"]
                 thisTICITMean = thisOutput[thisPeak][thisRatio]["TIC*ITMean"]
+                thisSumCount = thisOutput[thisPeak][thisRatio]["SumTotalCounts"]
                 thisShotNoise = thisOutput[thisPeak][thisRatio]["ShotNoiseLimit by Quadrature"]
                 thisRow = [thisFileName, thisPeak, thisRatio, thisRIntegratedVal, thisRVal, \
-                    thisStdDev, thisStError,thisRelStError,thisTICVar,thisTICITVar,thisTICITMean, thisShotNoise] 
+                    thisStdDev, thisStError,thisRelStError,thisTICVar,thisTICITVar,thisTICITMean, thisSumCount, thisShotNoise] 
                 rtnAllFilesDF.append(thisRow)
 
     rtnAllFilesDF = pd.DataFrame(rtnAllFilesDF)
