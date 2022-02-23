@@ -21,7 +21,7 @@ from collections import Counter
 from scipy.stats import norm
 from scipy.optimize import curve_fit
 import scipy.integrate 
-import openpyxl
+
 
 #####################################################################
 ########################## CONSTANTS ################################
@@ -412,7 +412,7 @@ def integrateTimeSeries(x, y, windowLength = 5, nanReplacer = 0.000001, slopeThr
 
     return y_trap_int, y_sum_int
     
-def calc_Raw_File_Output(dfList, isotopeList = ['13C','15N','UnSub'],omitRatios = []):
+def calc_Raw_File_Output(dfList, isotopeList = ['13C','15N','UnSub'],omitRatios = [],weightByNLOn=False):
     '''
     For each ratio of interest, calculates mean, stdev, SErr, RSE, and ShotNoise based on counts. 
     Outputs these in a dictionary which organizes by fragment (i.e different entries for fragments at 119 and 109).
@@ -560,7 +560,7 @@ def calc_Folder_Output(folderPath, cullOn=None, cullAmount=2,\
         thisPandas = convert_To_Pandas_DataFrame(thesePeaks)
         thisMergedDF = combine_Substituted_Peaks(peakDF=thisPandas,cullOn=cullOn, cullZeroScansOn = cullZeroScansOn, baselineCorrectionOn = baselineSubstractionOn, weightByNLOn=weightByNLOn, \
                 gc_elution_on=gcElutionOn, gc_elution_times=gcElutionTimes, backgroundNLTimes=backgroundNLTimes, cullAmount=cullAmount, isotopeList=isotopeList, minNL_over_maxNL=minNL_over_maxNL)
-        thisOutput = calc_Raw_File_Output(thisMergedDF, isotopeList, omitRatios)
+        thisOutput = calc_Raw_File_Output(thisMergedDF, isotopeList, omitRatios, weightByNLOn=weightByNLOn)
         keys = list(thisOutput.keys())
         peakNumber = len(keys)
 

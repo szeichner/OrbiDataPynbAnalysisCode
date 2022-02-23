@@ -1,17 +1,18 @@
 ##!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Last Modified: Monday March 15, 2021
+Last Modified: February 23, 2022
 
 @author: sarahzeichner
 """
 
 import DataAnalyzerWithPeakInteg
 
-
 #(1) Data Folder: Specify what folder contains the files to be analyzed
-inputStandardFolder = "/Users/sarahzeichner/Documents/Caltech/Research/Murchison AA/August2021_sensitivityTests/BetaAlanine"
-
+#inputStandardFolder = "/Users/sarahzeichner/Documents/Caltech/Research/Murchison AA/April 2021 - Dirty Murchison/April2021_DirtyMurchData/04292021"
+#inputStandardFolder = "/Users/sarahzeichner/Documents/Caltech/Research/Murchison AA/Jan2022 - PristineMurchData/Raw Data/02032022/alanine"
+inputStandardFolder = "/Users/sarahzeichner/Documents/Caltech/Research/Murchison AA/Jan2022 - PristineMurchData/Raw Data/reprocessed-dirtymurch/156"
+#inputStandardFolder = "/Users/sarahzeichner/Documents/Caltech/Research/Murchison AA/Jan2022 - PristineMurchData/Raw Data/01312022"
 #####################################################################
 
 #(2) Experimental parameters
@@ -38,11 +39,20 @@ isotopeList = ['UnSub','13C']
 #peakTimeFrames = [(8.54, 8.86)] #p-xylene
 #peakTimeFrames = [(4.56, 6.7)] #chimiak dallas alanine, 184 and 140 peaks
 #peakTimeFrames = [(18.6, 38)]
-peakTimeFrames = [(6.0, 45.0)]
+#peakTimeFrames = [(36.7,41.3)] #pristine murch, aspartic acid
+#peakTimeFrames = [(19.45,110)] #pristine murch, beta alanine
+#peakTimeFrames = [(13.8,110)] #pristine murch, alanine
+peakTimeFrames = [(18.7,23.8)] #dirty murch, aspartic acid
+#peakTimeFrames = [(8.15,30)] #dirty murch, beta alanine
 
 #(2c) Specify time to extract out the background, similar to what is done in x-calibur when you highlight a part of the background
 #backgroundNLTimes = [(8.6,8.8),(8.6,8.8),(8.6,8.8)]
-backgroundNLTimes = []
+#backgroundNLTimes = []
+#backgroundNLTimes = [(36.45,36.5)] #pristine murch, aspartic
+backgroundNLTimes = [(18.15,18.60)] #dirty murch, aspartic
+#backgroundNLTimes = [(8.10,8.15)] #dirty murch, beta alanine
+#backgroundNLTimes = [(13.75, 13.80)] #pristine murch, alanine
+#backgroundNLTimes = [(19.35, 19.40)] #pristine murch, beta alanine
 
 #(2d)Specify any ratios to omit
 #omitRatios = ['15N/13C', '13C/15N'] #for nitrogen data
@@ -54,11 +64,11 @@ omitRatios = []
 
 dataCullThreshhold = None #default = None; a target variable, like 'tic', or 'TIC*IT' to use to determine which scans to call. 
 cullZeroScansOn = False #True/False
-baselineSubstractionOn = False #True/False, when False, no baseline correction is applied to NL scores
+baselineSubstractionOn = True #True/False, when False, no baseline correction is applied to NL scores
 gc_elution_on = True #True/False, when False, all scans are taken to calculate ratios
-weight_by_NL_on = False
+weight_by_NL_on = True
 cullAmount = 2  
-cullingThreshholdPercentMaxUnsubNLPeak = 0.30 #Threshhold to cull only above a threshhold for the values where NL/maxUnSub(NL)<threshhold
+cullingThreshholdPercentMaxUnsubNLPeak = 0 #Threshhold to cull only above a threshhold for the values where NL/maxUnSub(NL)<threshhold
 
 #####################################################################
  
