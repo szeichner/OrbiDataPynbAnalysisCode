@@ -31,6 +31,7 @@ WINDOW_LENGTH  = 5
 SLOPE_THRESHHOLD = 0.008
 NAN_REPLACER = 0.0000001
 TRAP_RULE_BOOL = False
+MAXIT = 3000
 
 #####################################################################
 ########################## FUNCTIONS ################################
@@ -50,7 +51,7 @@ def import_Peaks_From_FTStatFile(inputFileName):
     '''
     #Get data and delete header
     data = []
-    for line in open(inputFileName):
+    for line in open(inputFileName, encoding='utf-8'):
         data.append(line.split('\t'))
 
     for l in range(len(data)):
@@ -118,7 +119,7 @@ def convert_To_Pandas_DataFrame(peaks):
 
     return(rtnAllPeakDF)
 
-def calculate_Counts(peakDF,weightByNLOn = False,resolution=120000,CN=4.4,z=1,Microscans=1):
+def calculate_Counts(peakDF,weightByNLOn = False,resolution=120000,CN=2.7,z=1,Microscans=1):
     '''
     Calculate counts of each scan peak. If weightByNLOn = True, calculate counts weighted by the % of absolute intensity
     that scan is
@@ -187,7 +188,7 @@ def calc_Append_Ratios(singleDf, allBelowOne = True, isotopeList = ['UnSub', '15
 
 def combine_Substituted_Peaks(peakDF, cullOn = [], cullZeroScansOn = False, baselineCorrectionOn=False, weightByNLOn=False,\
                             gc_elution_on = False, gc_elution_times = [], backgroundNLTimes=[], cullAmount = 2, isotopeList = ['13C','15N','UnSub'], \
-                            minNL_over_maxNL = 0):
+                            maxIT = MAXIT, minNL_over_maxNL = 0):
     '''
     Merge all extracted peaks from a given fragment into a single dataframe. For example, if I extracted six peaks, the 13C, 15N, and unsubstituted of fragments at 119 and 109, 
     this would input a list of six dataframes (one per peak) and combine them into two dataframes (one per fragment), each including data from the 13C, 15N, 
@@ -287,6 +288,9 @@ def combine_Substituted_Peaks(peakDF, cullOn = [], cullZeroScansOn = False, base
             if gc_elution_on == True and gc_elution_times != 0:
                 df1= cull_On_GC_Peaks(df1, thisGCElutionTimeRange)
 
+            #remove where the scan reaches max IT
+            df1 = removeMaxITScans(df1, maxIT)
+
             #Cull measurments based on percent of maxNL of unsub peak
             if minNL_over_maxNL != 0:
                 df1 = cull_On_Reservoir_Measurement(df1,minNL_over_maxNL)
@@ -318,6 +322,17 @@ def cull_Zero_Scans(df):
         culled df without zero
     '''
     df = df[~(df == 0).any(axis=1)]
+    return df
+
+def removeMaxITScans(df, MAXIT=3000):
+    '''
+    Inputs:
+        df: input dataframe to cull
+    Outputs:
+        culled df without integTime = 3000
+    '''
+
+    df = df[df.integTime != 3000]
     return df
 
 def remove_background_NL(peakDF, gcElutionTime, backgroundTimeFrame=(0,0)):
@@ -515,7 +530,7 @@ def calc_Raw_File_Output(dfList, isotopeList = ['13C','15N','UnSub'],omitRatios 
 def calc_Folder_Output(folderPath, cullOn=None, cullAmount=2,\
                        cullZeroScansOn=False, baselineSubstractionOn=False, gcElutionOn=False, weightByNLOn=False,\
                        gcElutionTimes = [], backgroundNLTimes = [], isotopeList = ['UnSub', '13C'], \
-                       minNL_over_maxNL=0.1, omitRatios = []):
+                       minNL_over_maxNL=0.1, maxIT=MAXIT, omitRatios = []):
 
     '''
     For each raw file in a folder, calculate mean, stdev, SErr, RSE, and ShotNoise based on counts. Outputs these in 
@@ -559,7 +574,7 @@ def calc_Folder_Output(folderPath, cullOn=None, cullAmount=2,\
         thesePeaks = import_Peaks_From_FTStatFile(thisFileName)
         thisPandas = convert_To_Pandas_DataFrame(thesePeaks)
         thisMergedDF = combine_Substituted_Peaks(peakDF=thisPandas,cullOn=cullOn, cullZeroScansOn = cullZeroScansOn, baselineCorrectionOn = baselineSubstractionOn, weightByNLOn=weightByNLOn, \
-                gc_elution_on=gcElutionOn, gc_elution_times=gcElutionTimes, backgroundNLTimes=backgroundNLTimes, cullAmount=cullAmount, isotopeList=isotopeList, minNL_over_maxNL=minNL_over_maxNL)
+                gc_elution_on=gcElutionOn, gc_elution_times=gcElutionTimes, backgroundNLTimes=backgroundNLTimes, cullAmount=cullAmount, isotopeList=isotopeList, maxIT=MAXIT, minNL_over_maxNL=minNL_over_maxNL)
         thisOutput = calc_Raw_File_Output(thisMergedDF, isotopeList, omitRatios, weightByNLOn=weightByNLOn)
         keys = list(thisOutput.keys())
         peakNumber = len(keys)
